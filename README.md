@@ -1,0 +1,99 @@
+# Agent View
+
+A cyberpunk pixel-art office for your [herdr](https://herdr.dev) agents,
+built on [Electrobun](https://github.com/blackboardsh/electrobun).
+
+![Agent View](docs/screenshot.png)
+
+Every AI agent running in herdr appears as a little pixel person in a shared
+neon-lit room. One glance at the window tells you who is working, who is
+stuck waiting for you, and who is slacking off in front of the TV.
+
+| herdr status | in the room |
+|---|---|
+| `working` | sits at their desk, typing at an angled holo-screen |
+| `blocked` (waiting for your input) | stands up, raises a hand, jumps — `!` |
+| `idle` | couch & TV first; ramen bar when the couch is full; bed after ~5 min |
+| `unknown` | stands around confused — `?` |
+| pane closed | walks out through the sliding door |
+
+## The room
+
+- **Characters walk** between spots along walk lanes — no teleporting. New
+  agents file in through the sliding door one by one.
+- **Every agent owns a desk** (assigned on first sight, freed when the pane
+  closes) and always returns to the same seat.
+- **Idle chain:** 3 couch seats (the TV switches on), then a 4-seat ramen
+  bar — steaming noodle bowls in each guest's project color — then loiter
+  spots. After ~5 minutes idle they climb into the bunk bed (zZz).
+- **Colors are collision-free:** 5 agent outfit colors and 5 project accent
+  colors, handed out first-come-first-served and persisted in localStorage.
+  Same project = same accent (scarf, nametag, blanket stripe, mug, bowl).
+- **Name tags** render on a fixed-size HUD layer above the pixel scene, so
+  they stay small and crisp at any window size. The herdr-focused pane gets
+  a bobbing yellow caret.
+- **Ambience:** rain and parallax skyline in the window, a 24h wall clock,
+  scanlines + vignette, steam, dust, TV light pools — and a HERDR neon sign
+  whose second R keeps dying.
+- **Daemon the cat** wanders, naps on the couch arm, and if you ignore a
+  blocked agent for more than a minute, walks to that desk and stares at you.
+- **Offline is explicit:** if herdr is down you get a blacked-out room and a
+  flickering OFFLINE banner — never silently stale data.
+
+## Interaction
+
+The window is a frameless neon widget: drag it by the title strip, `◎` pins
+it always-on-top, `×` quits. Hover a character for status details;
+double-click to focus that agent's pane in herdr.
+
+## Run
+
+```bash
+bun install
+bun start            # live herdr data
+bun run dev          # live + watch mode
+bun run fake         # HERDR_FAKE=1 — deterministic 90s demo loop, no herdr needed
+bun run chaos        # randomized soak test
+bun test             # data-layer unit tests
+```
+
+## How it works
+
+- **Bun process** (`src/bun/`) polls `herdr agent list` at 1 Hz, normalizes
+  and debounces statuses (2 consecutive polls to change, except `blocked`
+  which is instant — the raised hand is the whole point), and pushes full
+  snapshots to the webview over Electrobun's typed RPC.
+- **Webview** (`src/mainview/`) is a 384x216 canvas scene scaled by integer
+  factors (WKWebView, `image-rendering: pixelated`). Characters are driven
+  by a small state machine over walk lanes; everything y-sorts for depth.
+  Effects never use `ctx.filter`/`shadowBlur` in the frame loop — glow is
+  pre-rendered and stamped with `globalCompositeOperation: "lighter"`.
+- **All pixel art is code** — string rows + palette maps in
+  `src/mainview/sprites/sheets/`, no binary assets. Sprites bake to
+  OffscreenCanvases once at boot.
+- **Shared contract** lives in `src/shared/types.ts`.
+
+### Art tooling
+
+Render any sprite sheet (or the 3x5 bitmap font) to a PNG contact sheet:
+
+```bash
+bun tools/preview.ts src/mainview/sprites/sheets/character.ts /tmp/preview.png 10
+```
+
+### Dev frame dumps
+
+Launch with `AGENTVIEW_SHOT=/tmp/shot.png` and the app writes its rendered
+frame there a few seconds after load and every 10s (or press `s`). Handy for
+checking the scene without screen-recording permissions.
+
+### Note on first build
+
+Electrobun's CLI downloads its native binaries from GitHub Releases on first
+build. If that fails with a certificate error, fetch manually:
+
+```bash
+curl -sL -o /tmp/eb-core.tar.gz https://github.com/blackboardsh/electrobun/releases/download/v1.18.1/electrobun-core-darwin-arm64.tar.gz
+mkdir -p node_modules/electrobun/dist-macos-arm64
+tar -xzf /tmp/eb-core.tar.gz -C node_modules/electrobun/dist-macos-arm64
+```

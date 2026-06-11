@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Agent View</title>
+	<link rel="stylesheet" href="index.css">
+</head>
+<body>
+	<div id="frame">
+		<div id="titlebar" class="electrobun-webkit-app-region-drag">
+			<span id="title"><span class="glyph">▓</span> AGENT VIEW</span>
+			<span id="buttons" class="electrobun-webkit-app-region-no-drag">
+				<button id="pin" title="Always on top" aria-pressed="false">◎</button>
+				<button id="close" title="Quit">×</button>
+			</span>
+		</div>
+		<div id="screen" class="electrobun-webkit-app-region-no-drag">
+			<canvas id="game"></canvas>
+			<div id="tooltip" hidden></div>
+		</div>
+	</div>
+	<script src="index.js"></script>
+</body>
+</html>

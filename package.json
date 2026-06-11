@@ -1,0 +1,19 @@
+{
+	"name": "agent-view",
+	"version": "0.1.0",
+	"description": "Cyberpunk pixel-art office for your herdr agents",
+	"scripts": {
+		"start": "electrobun dev",
+		"dev": "electrobun dev --watch",
+		"fake": "HERDR_FAKE=1 electrobun dev --watch",
+		"chaos": "HERDR_FAKE=chaos electrobun dev --watch",
+		"build": "electrobun build",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"electrobun": "1.18.1"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	}
+}

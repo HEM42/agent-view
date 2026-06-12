@@ -17,6 +17,19 @@ stuck waiting for you, and who is slacking off in front of the TV.
 | `unknown` | stands around confused — `?` |
 | pane closed | walks out through the sliding door |
 
+## Install
+
+```sh
+brew install --cask jgwesterlund/tap/agent-view
+```
+
+Apple Silicon, macOS 14+. The app is ad-hoc signed but not notarized; the
+cask clears the quarantine flag for you. If macOS still blocks the first
+launch, run `xattr -dr com.apple.quarantine "/Applications/Agent View.app"`.
+
+You'll also need [herdr](https://herdr.dev) installed and running — Agent
+View reads its agent list from herdr.
+
 ## The room
 
 - **Characters walk** between spots along walk lanes — no teleporting. New
@@ -46,7 +59,7 @@ The window is a frameless neon widget: drag it by the title strip, `◎` pins
 it always-on-top, `×` quits. Hover a character for status details;
 double-click to focus that agent's pane in herdr.
 
-## Run
+## Run from source
 
 ```bash
 bun install

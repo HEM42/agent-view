@@ -83,14 +83,19 @@ async function readSettings(path: string): Promise<any> {
 	}
 }
 
-/** Writes through a symlinked settings.json (dotfile managers) and keeps the file's mode. */
-async function writeSettings(path: string, settings: any): Promise<void> {
+/**
+ * Writes through a symlinked settings.json (dotfile managers) and keeps the file's mode.
+ * No change, no write; the backup is only made once, so it keeps the pre-install state.
+ */
+async function writeSettings(path: string, before: any, settings: any): Promise<void> {
+	if (JSON.stringify(settings) === JSON.stringify(before)) return;
 	await mkdir(dirname(path), { recursive: true });
 	const real = await realpath(path).catch(() => path);
 	const mode = await stat(real)
 		.then((st) => st.mode & 0o7777)
 		.catch(() => null); // null: no file yet
-	if (mode !== null) await copyFile(real, `${real}.agent-view.bak`);
+	const backup = `${real}.agent-view.bak`;
+	if (mode !== null && !existsSync(backup)) await copyFile(real, backup);
 	const tmp = `${real}.agent-view.tmp`;
 	await writeFile(tmp, `${JSON.stringify(settings, null, 2)}\n`);
 	if (mode !== null) await chmod(tmp, mode);
@@ -103,26 +108,44 @@ export async function install(opts: { home: string; settings: string; source: st
 	await mkdir(dirname(p.hook), { recursive: true });
 	await copyFile(opts.source, p.hook);
 	await chmod(p.hook, 0o755);
-	await writeSettings(opts.settings, addHooks(settings, p.hook));
+	await writeSettings(opts.settings, settings, addHooks(settings, p.hook));
 }
 
 export async function uninstall(opts: { home: string; settings: string }): Promise<void> {
 	const p = paths(opts.home);
 	if (existsSync(opts.settings)) {
-		await writeSettings(opts.settings, removeHooks(await readSettings(opts.settings), p.hook));
+		const settings = await readSettings(opts.settings);
+		await writeSettings(opts.settings, settings, removeHooks(settings, p.hook));
 	}
 	await rm(dirname(p.hook), { recursive: true, force: true });
 	await rm(p.data, { recursive: true, force: true });
 }
 
-if (import.meta.main) {
-	const [cmd, ...rest] = process.argv.slice(2);
+const USAGE = "usage: bun tools/hook-install.ts install|uninstall [--settings <path>] [--home <dir>]";
+
+/** null: a flag without its value — never fall back to the real settings then. */
+export function parseArgs(argv: string[]): { cmd: string | undefined; home: string; settings: string } | null {
+	const [cmd, ...rest] = argv;
 	const flag = (name: string) => {
 		const i = rest.indexOf(name);
-		return i >= 0 ? rest[i + 1] : undefined;
+		if (i < 0) return undefined;
+		const v = rest[i + 1];
+		return v && !v.startsWith("--") ? v : null;
 	};
-	const home = flag("--home") ?? homedir();
-	const settings = flag("--settings") ?? paths(home).settings;
+	const home = flag("--home");
+	const settings = flag("--settings");
+	if (home === null || settings === null) return null;
+	const h = home ?? homedir();
+	return { cmd, home: h, settings: settings ?? paths(h).settings };
+}
+
+if (import.meta.main) {
+	const args = parseArgs(process.argv.slice(2));
+	if (!args) {
+		console.error(USAGE);
+		process.exit(2);
+	}
+	const { cmd, home, settings } = args;
 	try {
 		if (cmd === "install") {
 			await install({ home, settings, source: join(import.meta.dir, "..", "hook", "agent-view-hook.sh") });
@@ -131,7 +154,7 @@ if (import.meta.main) {
 			await uninstall({ home, settings });
 			console.log(`removed the Agent View hook from ${settings}`);
 		} else {
-			console.error("usage: bun tools/hook-install.ts install|uninstall [--settings <path>] [--home <dir>]");
+			console.error(USAGE);
 			process.exit(2);
 		}
 	} catch (e: any) {

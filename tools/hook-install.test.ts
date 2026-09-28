@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { EVENTS, addHooks, commandFor, install, paths, removeHooks, uninstall } from "./hook-install";
+import { EVENTS, addHooks, commandFor, install, parseArgs, paths, removeHooks, uninstall } from "./hook-install";
 
 const HOOK = "/Users/john/Library/Application Support/Agent View/hook/agent-view-hook.sh";
 const SOURCE = join(import.meta.dir, "..", "hook", "agent-view-hook.sh");
@@ -108,6 +108,25 @@ describe("install / uninstall", () => {
 		expect((await stat(settings)).mode & 0o777).toBe(0o600);
 	});
 
+	test("an unchanged settings file is not rewritten; the first backup is kept", async () => {
+		const original = JSON.stringify(OTHER); // compact: a rewrite would pretty-print it
+		await writeFile(settings, original);
+		await uninstall({ home, settings }); // nothing of ours in it
+		expect(await readFile(settings, "utf8")).toBe(original);
+		expect(existsSync(`${settings}.agent-view.bak`)).toBe(false);
+
+		await install({ home, settings, source: SOURCE });
+		await utimes(settings, 1_000_000, 1_000_000);
+		await install({ home, settings, source: SOURCE }); // already installed
+		expect((await stat(settings)).mtimeMs).toBe(1_000_000_000);
+
+		const edited = JSON.parse(await readFile(settings, "utf8"));
+		await writeFile(settings, JSON.stringify({ ...edited, theme: "dark" }));
+		await uninstall({ home, settings });
+		expect(await readFile(`${settings}.agent-view.bak`, "utf8")).toBe(original); // pre-install state
+		expect(JSON.parse(await readFile(settings, "utf8"))).toEqual({ ...OTHER, theme: "dark" });
+	});
+
 	test("no settings file yet: install creates one", async () => {
 		await install({ home, settings, source: SOURCE });
 		expect(JSON.parse(await readFile(settings, "utf8")).hooks.SubagentStart).toHaveLength(1);
@@ -151,5 +170,41 @@ describe("apostrophe in path", () => {
 	test("removeHooks restores original when path has apostrophe", () => {
 		const apostrophePath = "/Users/john/Library/Application Support/Agent View/hook/o'brien-hook.sh";
 		expect(removeHooks(addHooks(OTHER, apostrophePath), apostrophePath)).toEqual(OTHER);
+	});
+});
+
+describe("command line", () => {
+	test("parseArgs reads the flags and falls back to the default paths", () => {
+		expect(parseArgs(["install", "--home", "/h", "--settings", "/s.json"])).toEqual({
+			cmd: "install",
+			home: "/h",
+			settings: "/s.json",
+		});
+		expect(parseArgs(["uninstall", "--home", "/h"])).toEqual({ cmd: "uninstall", home: "/h", settings: paths("/h").settings });
+	});
+
+	test("parseArgs rejects a flag without a value", () => {
+		expect(parseArgs(["install", "--settings"])).toBeNull();
+		expect(parseArgs(["install", "--settings", "--home", "/h"])).toBeNull();
+		expect(parseArgs(["install", "--home", "--settings", "/s.json"])).toBeNull();
+		expect(parseArgs(["install", "--settings", "/s.json", "--home"])).toBeNull();
+		expect(parseArgs(["install", "--home", ""])).toBeNull();
+	});
+
+	test("a flag without a value prints usage and exits 2", async () => {
+		const home = await mkdtemp(join(tmpdir(), "agentview-cli-"));
+		try {
+			const proc = Bun.spawn([process.execPath, join(import.meta.dir, "hook-install.ts"), "install", "--home", home, "--settings"], {
+				cwd: home,
+				stdout: "ignore",
+				stderr: "pipe",
+				env: { PATH: process.env["PATH"] ?? "/usr/bin:/bin", HOME: home },
+			});
+			expect(await proc.exited).toBe(2);
+			expect(await new Response(proc.stderr).text()).toContain("usage:");
+			expect(await readdir(home)).toEqual([]); // nothing installed anywhere
+		} finally {
+			await rm(home, { recursive: true, force: true });
+		}
 	});
 });

@@ -61,6 +61,27 @@ The window is a frameless neon widget: drag it by the title strip, `◎` pins
 it always-on-top, `×` quits. Hover a character for status details;
 double-click to focus that agent's pane in herdr.
 
+## Screensaver
+
+The same room is also available as a macOS screensaver. It shows your
+live herdr agents while the Agent View daemon is running, and falls back
+to the demo loop (marked `DEMO`) when it isn't.
+
+The screensaver sandbox can't reach herdr's socket, so the daemon publishes
+each `herdr agent list` result to
+`~/Library/Application Support/Agent View/agents.json` and the
+screensaver reads it; a file older than 3 seconds counts as offline.
+
+```bash
+bun run build:saver     # → build/Agent View.saver
+bun run install:saver   # → ~/Library/Screen Savers/
+```
+
+Then pick **Agent View** under System Settings → Wallpaper → Other
+(older macOS: System Settings → Screen Saver). Feed transitions are
+logged:
+`log show --last 10m --predicate 'subsystem == "com.cygnisec.agentview.saver"'`.
+
 ## Run from source
 
 ```bash

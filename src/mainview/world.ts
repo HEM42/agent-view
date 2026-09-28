@@ -19,7 +19,8 @@ import type { Vec2 } from "./scene/layout";
 
 const SPAWN_STAGGER_MS = 450;
 const RETRY_MS = 1500;
-const LINK_LOST_MS = 5000;
+/** How long without a reconcile() before the renderer shows link-lost. */
+export const LINK_LOST_MS = 5000;
 
 export class World {
 	chars = new Map<string, Character>();

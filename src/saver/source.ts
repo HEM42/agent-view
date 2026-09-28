@@ -1,4 +1,5 @@
 import { HerdrError, interpretHerdrResult, OFFLINE_AFTER, type AgentSource, type RawAgent } from "../shared/herdr-core";
+import { LINK_LOST_MS } from "../mainview/world";
 
 /**
  * What the Swift HerdrBridge replies with (saver/HerdrBridge.swift): the
@@ -12,8 +13,8 @@ export interface Bridge {
 	list(): Promise<BridgeReply>;
 }
 
-/** Shorter than the renderer's 5s link-lost banner. */
-export const BRIDGE_TIMEOUT_MS = 4000;
+/** Must fire before the renderer's link-lost banner (World.linkLost). */
+export const BRIDGE_TIMEOUT_MS = LINK_LOST_MS - 1000;
 
 /** The native bridge, or null in the preview thumbnail / a plain browser. */
 export function webkitBridge(): Bridge | null {

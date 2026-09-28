@@ -8,7 +8,7 @@ import type { AgentViewRPC, Snapshot } from "../shared/types";
 import { VERSION } from "../shared/version";
 import { DaemonClient } from "./daemon-client";
 import { ensureDaemon, healthy, managedMode, relabelOffline } from "./daemon-setup";
-import { FakeSource } from "./fake";
+import { FakeSource } from "../shared/fake";
 
 const fakeMode = process.env["HERDR_FAKE"];
 // fake mode runs its own daemon in this process, one port above the installed one

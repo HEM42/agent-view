@@ -1,4 +1,4 @@
-import { FakeSource } from "../bun/fake";
+import { FakeSource } from "../shared/fake";
 import { publishFeed } from "../bun/feed";
 import { HerdrCliSource } from "../bun/herdr";
 import { VERSION } from "../shared/version";

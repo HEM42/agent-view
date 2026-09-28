@@ -1,5 +1,5 @@
-import type { AgentStatus } from "../shared/types";
-import { HerdrError, type AgentSource, type RawAgent } from "./herdr";
+import type { AgentStatus } from "./types";
+import { HerdrError, type AgentSource, type RawAgent } from "./herdr-core";
 
 /**
  * HERDR_FAKE=1     deterministic 90s looping scenario exercising every
@@ -100,8 +100,10 @@ export class FakeSource implements AgentSource {
 	private t0 = Date.now();
 	private chaos: FakeWorld | null = null;
 	private nextChaosEvent = 0;
+	private outage: boolean;
 
-	constructor(mode: string) {
+	constructor(mode: string, opts: { outage?: boolean } = {}) {
+		this.outage = opts.outage ?? true; // the screensaver never wants the OFFLINE window
 		if (mode === "chaos") {
 			this.chaos = new FakeWorld();
 			this.chaos.add("claude", "nordlink", "working");
@@ -112,7 +114,7 @@ export class FakeSource implements AgentSource {
 	async list(): Promise<RawAgent[]> {
 		if (this.chaos) return this.chaosList();
 		const w = worldAt((Date.now() - this.t0) % LOOP_MS);
-		if (w.offline) throw new HerdrError("server-down", "fake outage");
+		if (w.offline && this.outage) throw new HerdrError("server-down", "fake outage");
 		return w.list();
 	}
 

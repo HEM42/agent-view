@@ -11,6 +11,8 @@
 		"install:daemon": "bun tools/daemon-install.ts install",
 		"uninstall:daemon": "bun tools/daemon-install.ts uninstall",
 		"build": "electrobun build",
+		"build:saver": "sh saver/build.sh",
+		"install:saver": "sh saver/install.sh",
 		"test": "bun test"
 	},
 	"dependencies": {

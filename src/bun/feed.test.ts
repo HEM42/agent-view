@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { FEED_PATH, publishFeed } from "./feed";
 
@@ -17,7 +17,7 @@ afterEach(async () => {
 
 describe("publishFeed", () => {
 	test("FEED_PATH is the path the screensaver bridge reads", () => {
-		expect(FEED_PATH).toBe(`${process.env["HOME"]}/Library/Application Support/Agent View/agents.json`);
+		expect(FEED_PATH).toBe(`${homedir()}/Library/Application Support/Agent View/agents.json`);
 	});
 
 	test("creates missing directories and writes the output", async () => {

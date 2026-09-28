@@ -1,4 +1,5 @@
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, unlink, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 /**
@@ -6,7 +7,7 @@ import { dirname, join } from "node:path";
  * good `herdr agent list` here and the saver reads it (saver/HerdrBridge.swift).
  */
 export const FEED_PATH = join(
-	process.env["HOME"] ?? "",
+	homedir(),
 	"Library",
 	"Application Support",
 	"Agent View",
@@ -14,10 +15,11 @@ export const FEED_PATH = join(
 );
 
 let lastError = "";
+let tmpCounter = 0;
 
 /** Atomic: a reader sees the old file or the new one, never half of one. */
 export async function publishFeed(stdout: string, path = FEED_PATH): Promise<void> {
-	const tmp = `${path}.${process.pid}.tmp`;
+	const tmp = `${path}.${process.pid}.${tmpCounter++}.tmp`;
 	try {
 		await mkdir(dirname(path), { recursive: true });
 		await writeFile(tmp, stdout);
@@ -30,5 +32,6 @@ export async function publishFeed(stdout: string, path = FEED_PATH): Promise<voi
 			lastError = msg;
 			console.warn(`[feed] could not publish ${path}: ${msg}`);
 		}
+		await unlink(tmp).catch(() => {});
 	}
 }

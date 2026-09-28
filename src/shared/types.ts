@@ -2,6 +2,15 @@ import type { RPCSchema } from "electrobun/bun";
 
 export type AgentStatus = "idle" | "working" | "blocked" | "unknown";
 
+/** A running Claude Code subagent, from the hook (see hook/agent-view-hook.sh). */
+export interface Subagent {
+	id: string; // Claude agent_id — stable identity key
+	type: string; // agent_type, e.g. "Explore", "general-purpose"
+	startedAt: number; // epoch ms
+	description?: string; // from the transcript meta file
+	model?: string; // from the transcript meta file, only when overridden
+}
+
 /** Exactly what the renderer needs. Nothing else crosses the bridge. */
 export interface AgentView {
 	id: string; // herdr terminal_id — stable identity key
@@ -9,6 +18,7 @@ export interface AgentView {
 	status: AgentStatus; // already debounced + normalized on the Bun side
 	project: string; // basename(cwd), e.g. "nordlink"
 	focused: boolean; // pane currently focused in herdr
+	subagents: Subagent[]; // oldest first; [] for non-Claude agents
 }
 
 export type OfflineReason = "not-installed" | "server-down" | "protocol-error" | "no-daemon" | "daemon-starting" | "daemon-down";

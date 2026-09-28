@@ -3,6 +3,7 @@ import type {
 	AgentView,
 	OfflineReason,
 	Snapshot,
+	Subagent,
 } from "./types";
 
 export class HerdrError extends Error {
@@ -17,10 +18,12 @@ export class HerdrError extends Error {
 /** Post-validation, pre-debounce agent entry (Bun-side only). */
 export interface RawAgent {
 	terminal_id: string;
+	pane_id: string; // herdr pane — the hook's key; "" when herdr omits it
 	agent: string;
 	status: AgentStatus;
 	cwd: string;
 	focused: boolean;
+	subagents: Subagent[];
 }
 
 /** The seam that lets HERDR_FAKE swap in a scripted source. */
@@ -41,6 +44,31 @@ export function normalizeStatus(s: unknown): AgentStatus {
 	return typeof s === "string" && VALID_STATUSES.has(s)
 		? (s as AgentStatus)
 		: "unknown"; // version drift never takes the room offline
+}
+
+/** Oldest first, id as tiebreak — the drone cap keeps the head of this order. */
+export function bySubagentAge(a: Subagent, b: Subagent): number {
+	return a.startedAt - b.startedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
+
+/** Optional `subagents` on a feed entry (the app adds it); anything malformed is dropped. */
+export function parseSubagents(v: unknown): Subagent[] {
+	if (!Array.isArray(v)) return [];
+	return v
+		.flatMap((s: any): Subagent[] =>
+			typeof s?.id === "string" && s.id && typeof s.startedAt === "number"
+				? [
+						{
+							id: s.id,
+							type: typeof s.type === "string" && s.type ? s.type : "agent",
+							startedAt: s.startedAt,
+							...(typeof s.description === "string" && s.description ? { description: s.description } : {}),
+							...(typeof s.model === "string" && s.model ? { model: s.model } : {}),
+						},
+					]
+				: [],
+		)
+		.sort(bySubagentAge);
 }
 
 /**
@@ -71,10 +99,12 @@ export function parseAgentList(text: string): RawAgent[] {
 			: [
 					{
 						terminal_id: a.terminal_id,
+						pane_id: typeof a.pane_id === "string" ? a.pane_id : "",
 						agent: typeof a.agent === "string" && a.agent ? a.agent : "agent",
 						status: normalizeStatus(a.agent_status),
 						cwd: typeof a.cwd === "string" ? a.cwd : "",
 						focused: a.focused === true,
+						subagents: parseSubagents(a.subagents),
 					},
 				],
 	);
@@ -195,6 +225,7 @@ export class HerdrPoller {
 				status: this.debounceStatus(a.terminal_id, a.status),
 				project: basenameOf(a.cwd),
 				focused: a.focused,
+				subagents: a.subagents,
 			});
 		}
 		for (const id of this.debounce.keys()) {

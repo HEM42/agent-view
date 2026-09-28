@@ -9,7 +9,15 @@ afterEach(() => {
 	for (const d of daemons.splice(0)) d.stop();
 });
 
-const AGENT: RawAgent = { terminal_id: "term_1", agent: "claude", status: "working", cwd: "/x/nordlink", focused: false };
+const AGENT: RawAgent = {
+	terminal_id: "term_1",
+	pane_id: "",
+	agent: "claude",
+	status: "working",
+	cwd: "/x/nordlink",
+	focused: false,
+	subagents: [],
+};
 
 class ScriptedSource implements AgentSource {
 	agents: RawAgent[] | "down" = [AGENT];

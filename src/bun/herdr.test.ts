@@ -52,10 +52,12 @@ describe("parseAgentList", () => {
 		expect(agents).toHaveLength(2);
 		expect(agents[0]).toEqual({
 			terminal_id: "term_653e1c7d189fc1f",
+			pane_id: "w653e1c7d189ff12-1",
 			agent: "claude",
 			status: "working",
 			cwd: "/Users/john/Projects/nordlink",
 			focused: false,
+			subagents: [],
 		});
 		expect(agents[1]!.status).toBe("idle");
 		expect(agents[1]!.focused).toBe(true);
@@ -194,10 +196,12 @@ describe("HerdrPoller offline state machine", () => {
 
 	const agent = (id: string, status: RawAgent["status"]): RawAgent => ({
 		terminal_id: id,
+		pane_id: "",
 		agent: "claude",
 		status,
 		cwd: "/Users/john/Projects/demo",
 		focused: false,
+		subagents: [],
 	});
 
 	async function runTicks(p: HerdrPoller, n: number): Promise<Snapshot[]> {

@@ -18,10 +18,12 @@ class FakeWorld {
 		const n = this.agents.length;
 		this.agents.push({
 			terminal_id: `fake_term_${n}`,
+			pane_id: `fake_pane_${n}`,
 			agent,
 			status,
 			cwd: `/Users/john/Projects/${project}`,
 			focused: n === 0,
+			subagents: [],
 			alive: true,
 		});
 	}
@@ -50,7 +52,7 @@ class FakeWorld {
 	list(): RawAgent[] {
 		return this.agents
 			.filter((a) => a.alive)
-			.map(({ alive, ...raw }) => raw);
+			.map(({ alive, ...raw }) => ({ ...raw, subagents: [...raw.subagents] }));
 	}
 }
 

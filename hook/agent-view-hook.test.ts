@@ -164,6 +164,12 @@ describe("agent-view-hook.sh", () => {
 		expect((await readdir(paneDir())).sort()).toEqual([`${AID}.start.json`, "session-a_b_c.json"]);
 	});
 
+	test("a non-hex agent_id writes no start file", async () => {
+		expect(await hook("SubagentStart", P.subagentStart.replace(AID, "AGENT-1"))).toBe(0);
+		const names = existsSync(paneDir()) ? await readdir(paneDir()) : [];
+		expect(names.filter((n) => n.endsWith(".start.json"))).toEqual([]);
+	});
+
 	test("no HERDR_PANE_ID: nothing is written", async () => {
 		expect(await hook("SubagentStart", P.subagentStart, { HERDR_PANE_ID: "" })).toBe(0);
 		expect(existsSync(root())).toBe(false);

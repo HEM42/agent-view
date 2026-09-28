@@ -4,7 +4,8 @@ import { HerdrError, type AgentSource, type RawAgent } from "./herdr-core";
 /**
  * HERDR_FAKE=1     deterministic 90s looping scenario exercising every
  *                  renderer path: all statuses, flicker suppression, blocked
- *                  latency, walk-in/out, crowd test, offline window.
+ *                  latency, walk-in/out, crowd test, offline window,
+ *                  subagent drones (background + burst).
  * HERDR_FAKE=chaos randomized soak test.
  */
 
@@ -13,6 +14,8 @@ const LOOP_MS = 90_000;
 class FakeWorld {
 	private agents: (RawAgent & { alive: boolean })[] = [];
 	offline = false;
+	loopStart = 0; // epoch ms of the current loop's t=0 (subagent startedAt)
+	private chaosSeq = 0;
 
 	add(agent: string, project: string, status: AgentStatus): void {
 		const n = this.agents.length;
@@ -49,6 +52,23 @@ class FakeWorld {
 		for (const a of alive.slice(-count)) a.alive = false;
 	}
 
+	/** A scripted subagent on agents[index], started `atSec` into the loop. */
+	sub(index: number, id: string, type: string, atSec: number, description?: string): void {
+		const a = this.agents[index];
+		if (a) a.subagents.push({ id, type, startedAt: this.loopStart + atSec * 1000, ...(description ? { description } : {}) });
+	}
+
+	/** chaos: start a subagent on agents[index], or finish its oldest one */
+	chaosSub(index: number, now: number): void {
+		const a = this.agents[index];
+		if (!a || a.agent !== "claude") return;
+		if (a.subagents.length < 9 && Math.random() < 0.6) {
+			a.subagents.push({ id: `chaos_sub_${this.chaosSeq++}`, type: Math.random() < 0.5 ? "Explore" : "general-purpose", startedAt: now });
+		} else {
+			a.subagents.shift();
+		}
+	}
+
 	list(): RawAgent[] {
 		return this.agents
 			.filter((a) => a.alive)
@@ -82,12 +102,25 @@ const SCRIPT: Step[] = [
 	{ at: 60, until: 64, apply: (w) => void (w.offline = true) }, // 4s outage
 	{ at: 70, apply: (w) => w.removeLast(8) },
 	{ at: 80, apply: (w) => w.set(0, "working") }, // back to start; loop at 90
+	// subagents: two background helpers keep agent 0's desk busy after it heads for the couch at 5s
+	{ at: 2, until: 20, apply: (w) => w.sub(0, "fake_sub_bg0", "general-purpose", 2, "Implement Task 5: bridge reads feed") },
+	{ at: 3, until: 17, apply: (w) => w.sub(0, "fake_sub_bg1", "Explore", 3, "Find the feed publisher") },
+	// burst: 8 subagents on agent 2 (6 drones + "+2"), finishing one by one
+	...Array.from(
+		{ length: 8 },
+		(_, i): Step => ({
+			at: 20.5 + i * 0.3,
+			until: 30 + i * 2.5,
+			apply: (w) => w.sub(2, `fake_sub_burst${i}`, i % 3 ? "general-purpose" : "Explore", 20.5 + i * 0.3, `Burst task ${i + 1}`),
+		}),
+	),
 ];
 
 /** Rebuild the world as a pure function of loop time — deterministic ids. */
-function worldAt(tMs: number): FakeWorld {
+function worldAt(tMs: number, loopStart: number): FakeWorld {
 	const t = tMs / 1000;
 	const w = new FakeWorld();
+	w.loopStart = loopStart;
 	for (const step of SCRIPT) {
 		if (step.at <= t && (step.until === undefined || t < step.until)) {
 			step.apply(w);
@@ -115,7 +148,8 @@ export class FakeSource implements AgentSource {
 
 	async list(): Promise<RawAgent[]> {
 		if (this.chaos) return this.chaosList();
-		const w = worldAt((Date.now() - this.t0) % LOOP_MS);
+		const elapsed = Date.now() - this.t0;
+		const w = worldAt(elapsed % LOOP_MS, Date.now() - (elapsed % LOOP_MS));
 		if (w.offline && this.outage) throw new HerdrError("server-down", "fake outage");
 		return w.list();
 	}
@@ -134,6 +168,9 @@ export class FakeSource implements AgentSource {
 				);
 			} else if (roll < 0.3 && alive.length > 2) {
 				w.removeLast(1);
+			} else if (roll < 0.45 && alive.length > 0) {
+				const id = alive[Math.floor(Math.random() * alive.length)]!.terminal_id;
+				w.chaosSub(Number(id.replace("fake_term_", "")), Date.now());
 			} else if (alive.length > 0) {
 				const target = Math.floor(Math.random() * alive.length);
 				const status =

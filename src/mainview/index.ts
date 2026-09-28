@@ -1,6 +1,7 @@
 import { Electroview } from "electrobun/view";
 import type { AgentViewRPC, Snapshot } from "../shared/types";
 import { Game } from "./game";
+import { droneTooltip, fmtDuration, moreTooltip } from "./ui/tooltip";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const tooltip = document.getElementById("tooltip") as HTMLDivElement;
@@ -64,12 +65,13 @@ matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener(
 
 // ---- hover tooltip + double-click focus ----
 
-function fmtDuration(ms: number): string {
-	const s = Math.floor(ms / 1000);
-	if (s < 60) return `${s}s`;
-	const m = Math.floor(s / 60);
-	if (m < 60) return `${m}m ${s % 60}s`;
-	return `${Math.floor(m / 60)}h ${m % 60}m`;
+function showTooltip(html: string, e: MouseEvent): void {
+	canvas.style.cursor = "pointer";
+	tooltip.innerHTML = html;
+	tooltip.hidden = false;
+	const rect = canvas.getBoundingClientRect();
+	tooltip.style.left = `${Math.min(e.offsetX + 14, rect.width - 200)}px`;
+	tooltip.style.top = `${Math.max(e.offsetY - 10, 4)}px`;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -81,23 +83,24 @@ const STATUS_LABEL: Record<string, string> = {
 
 canvas.addEventListener("mousemove", (e) => {
 	const p = game.toVirtual(e.offsetX, e.offsetY);
+	const drone = p ? game.world.pickDrone(p, performance.now()) : null;
+	if (drone) {
+		const parent = game.world.chars.get(drone.parentId) ?? null;
+		showTooltip(drone.kind === "drone" ? droneTooltip(drone.drone, parent, Date.now()) : moreTooltip(drone.overflow.hidden), e);
+		return;
+	}
 	const hit = p ? game.world.pick(p) : null;
 	if (!hit) {
 		tooltip.hidden = true;
 		canvas.style.cursor = "default";
 		return;
 	}
-	canvas.style.cursor = "pointer";
-	tooltip.innerHTML =
+	showTooltip(
 		`<span class="k">${hit.agent}</span> · ${hit.project}<br>` +
-		`${STATUS_LABEL[hit.desiredStatus] ?? hit.desiredStatus} — ${fmtDuration(
-			performance.now() - hit.statusSince,
-		)}<br>` +
-		`<span class="k">double-click</span> to focus in herdr`;
-	tooltip.hidden = false;
-	const rect = canvas.getBoundingClientRect();
-	tooltip.style.left = `${Math.min(e.offsetX + 14, rect.width - 200)}px`;
-	tooltip.style.top = `${Math.max(e.offsetY - 10, 4)}px`;
+			`${STATUS_LABEL[hit.desiredStatus] ?? hit.desiredStatus} — ${fmtDuration(performance.now() - hit.statusSince)}<br>` +
+			`<span class="k">double-click</span> to focus in herdr`,
+		e,
+	);
 });
 
 canvas.addEventListener("mouseleave", () => {
@@ -106,9 +109,9 @@ canvas.addEventListener("mouseleave", () => {
 
 canvas.addEventListener("dblclick", (e) => {
 	const p = game.toVirtual(e.offsetX, e.offsetY);
-	const hit = p ? game.world.pick(p) : null;
-	if (hit) {
-		electroview.rpc?.request.focusAgent({ id: hit.id }).then((res) => {
+	const id = p ? (game.world.pickDrone(p, performance.now())?.parentId ?? game.world.pick(p)?.id) : undefined;
+	if (id) {
+		electroview.rpc?.request.focusAgent({ id }).then((res) => {
 			if (!res.ok) console.warn(`focusAgent failed: ${res.error}`);
 		});
 	}

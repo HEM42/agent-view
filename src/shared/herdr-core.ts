@@ -105,6 +105,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export const STABLE_TICKS = 2; // status must survive 2 consecutive polls
 export const OFFLINE_AFTER = 3; // consecutive failures before declaring offline
+export const ONLINE_INTERVAL_MS = 1000; // poll period while herdr answers
 
 interface DebounceEntry {
 	confirmed: AgentStatus;
@@ -145,7 +146,7 @@ export class HerdrPoller {
 			const t0 = Date.now();
 			await this.tick(mine);
 			const interval = this.online
-				? 1000
+				? ONLINE_INTERVAL_MS
 				: this.lastReason === "not-installed"
 					? 5000 // back off; self-heals if the user installs herdr
 					: 2000; // server down: retry gently, it may come back

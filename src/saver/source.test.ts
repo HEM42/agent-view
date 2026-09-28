@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { HerdrError, HerdrPoller, type AgentSource, type RawAgent } from "../shared/herdr-core";
-import { DEMO_AFTER, LiveOrDemoSource, NativeHerdrSource, type Bridge, type BridgeReply } from "./source";
+import { HerdrError, HerdrPoller, ONLINE_INTERVAL_MS, type AgentSource, type RawAgent } from "../shared/herdr-core";
+import { LINK_LOST_MS } from "../mainview/world";
+import { BRIDGE_TIMEOUT_MS, DEMO_AFTER, LiveOrDemoSource, NativeHerdrSource, type Bridge, type BridgeReply } from "./source";
 
 const agent = (id: string): RawAgent => ({
 	terminal_id: id,
@@ -72,6 +73,11 @@ describe("NativeHerdrSource", () => {
 	test("non-zero exit maps to server-down", async () => {
 		const src = new NativeHerdrSource(bridgeOf(async () => ({ code: 1, stdout: "" })));
 		expect(await reasonOf(src.list())).toBe("server-down");
+	});
+
+	test("a hung bridge fails before link-lost, even after the online sleep, with a second to spare", () => {
+		// last good emit → ONLINE_INTERVAL_MS sleep → hung tick → timeout: must stay under the 5 s banner
+		expect(ONLINE_INTERVAL_MS + BRIDGE_TIMEOUT_MS).toBeLessThanOrEqual(LINK_LOST_MS - 1000);
 	});
 
 	test("bridge that never replies times out as server-down", async () => {

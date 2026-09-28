@@ -1,4 +1,4 @@
-import { HerdrError, interpretHerdrResult, OFFLINE_AFTER, type AgentSource, type RawAgent } from "../shared/herdr-core";
+import { HerdrError, interpretHerdrResult, OFFLINE_AFTER, ONLINE_INTERVAL_MS, type AgentSource, type RawAgent } from "../shared/herdr-core";
 import { LINK_LOST_MS } from "../mainview/world";
 
 /**
@@ -13,8 +13,12 @@ export interface Bridge {
 	list(): Promise<BridgeReply>;
 }
 
-/** Must fire before the renderer's link-lost banner (World.linkLost). */
-export const BRIDGE_TIMEOUT_MS = LINK_LOST_MS - 1000;
+/**
+ * Must fire before the renderer's link-lost banner (World.linkLost). The
+ * banner clock starts at the last good emit, so the online sleep before the
+ * hung tick counts too; the extra second absorbs timer lateness.
+ */
+export const BRIDGE_TIMEOUT_MS = LINK_LOST_MS - ONLINE_INTERVAL_MS - 1000;
 
 /** The native bridge, or null in the preview thumbnail / a plain browser. */
 export function webkitBridge(): Bridge | null {

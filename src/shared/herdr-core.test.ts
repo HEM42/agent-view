@@ -4,7 +4,11 @@ import {
 	HerdrPoller,
 	interpretHerdrResult,
 	type AgentSource,
+	type RawAgent,
 } from "./herdr-core";
+import type { Snapshot } from "./types";
+
+const RAW: RawAgent = { terminal_id: "t1", agent: "claude", status: "working", cwd: "/x/demo", focused: false };
 
 const OK = JSON.stringify({
 	result: {
@@ -59,5 +63,30 @@ describe("HerdrPoller loop", () => {
 		p.stop();
 		// three immediate first ticks, then one follow-up from the surviving loop
 		expect(calls).toBe(4);
+	});
+
+	test("a tick still awaiting the source when its loop stops changes nothing and emits nothing", async () => {
+		const pending: Array<{ ok: (v: RawAgent[]) => void; fail: (e: unknown) => void }> = [];
+		const src: AgentSource = {
+			list: () => new Promise<RawAgent[]>((ok, fail) => pending.push({ ok, fail })),
+			focus: async () => {},
+		};
+		const snaps: Snapshot[] = [];
+		const p = new HerdrPoller(src, (s) => snaps.push(s));
+		void p.start();
+		await new Promise((r) => setTimeout(r, 5));
+		p.stop(); // saver pause while the first poll is out
+		pending[0]!.ok([RAW]);
+		pending.length = 0;
+		await new Promise((r) => setTimeout(r, 5));
+		expect(snaps).toEqual([]);
+		expect(p.lastSnapshot().herdrOnline).toBe(false);
+
+		void p.start(); // resume: a new loop, its first poll is out too
+		await new Promise((r) => setTimeout(r, 5));
+		p.stop();
+		pending[0]!.fail(new HerdrError("server-down", "late failure"));
+		await new Promise((r) => setTimeout(r, 5));
+		expect(snaps).toEqual([]); // the late failure neither counts nor emits
 	});
 });

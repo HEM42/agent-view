@@ -143,7 +143,7 @@ export class HerdrPoller {
 		const mine = ++this.loop;
 		while (mine === this.loop) {
 			const t0 = Date.now();
-			await this.tick();
+			await this.tick(mine);
 			const interval = this.online
 				? 1000
 				: this.lastReason === "not-installed"
@@ -153,13 +153,16 @@ export class HerdrPoller {
 		}
 	}
 
-	private async tick(): Promise<void> {
+	/** A tick whose loop was stopped while it awaited the source leaves no trace. */
+	private async tick(mine = this.loop): Promise<void> {
 		try {
 			const raw = await this.source.list();
+			if (mine !== this.loop) return;
 			this.failures = 0;
 			this.online = true; // recovery is immediate (one good poll)
 			this.push(this.reconcile(raw));
 		} catch (e) {
+			if (mine !== this.loop) return;
 			const err =
 				e instanceof HerdrError
 					? e

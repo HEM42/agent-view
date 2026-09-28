@@ -137,6 +137,22 @@ describe("LiveOrDemoSource", () => {
 		expect(s.isDemo).toBe(true);
 	});
 
+	test("a live list() that was in flight at reset() does not bring its live streak back", async () => {
+		let release!: (v: RawAgent[]) => void;
+		let calls = 0;
+		const live: AgentSource = {
+			list: () => (++calls === 1 ? new Promise<RawAgent[]>((r) => (release = r)) : Promise.reject(down)),
+			focus: async () => {},
+		};
+		const s = new LiveOrDemoSource(live, demoSource);
+		const pending = s.list();
+		s.reset(); // the saver paused while the bridge call was out
+		release(LIVE);
+		await pending;
+		expect(await s.list()).toEqual(DEMO); // no grace window from pre-pause data
+		expect(s.isDemo).toBe(true);
+	});
+
 	test("poller over LiveOrDemoSource never reports offline", async () => {
 		const live = scripted([down, LIVE, down, down, down, down, gone, LIVE, down, LIVE]);
 		const p = new HerdrPoller(new LiveOrDemoSource(live, demoSource), () => {});

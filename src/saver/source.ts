@@ -73,6 +73,7 @@ export class LiveOrDemoSource implements AgentSource {
 	private failures = 0;
 	private hadLive = false;
 	private demo: boolean;
+	private epoch = 0; // bumped by reset(): a list() from before it must not touch the state
 
 	constructor(
 		private live: AgentSource | null,
@@ -87,19 +88,24 @@ export class LiveOrDemoSource implements AgentSource {
 
 	/** Screensaver: called on pause so a resume never trusts a stale "live" streak. */
 	reset(): void {
+		this.epoch++;
 		this.hadLive = false;
 		this.failures = 0;
 	}
 
 	async list(): Promise<RawAgent[]> {
+		const epoch = this.epoch;
 		if (this.live) {
 			try {
 				const agents = await this.live.list();
-				this.failures = 0;
-				this.hadLive = true;
-				this.demo = false;
+				if (epoch === this.epoch) {
+					this.failures = 0;
+					this.hadLive = true;
+					this.demo = false;
+				}
 				return agents;
 			} catch (e) {
+				if (epoch !== this.epoch) throw e; // stale: the poller drops it anyway
 				this.failures++;
 				const missing = e instanceof HerdrError && e.reason === "not-installed";
 				if (!this.demo && this.hadLive && !missing && this.failures < DEMO_AFTER) {

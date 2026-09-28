@@ -116,3 +116,11 @@ export function drawOffline(ctx: Ctx, reason: string, now: number): void {
 		Math.round(VH / 2 + 12),
 	);
 }
+
+/** Screensaver only: marks the scripted demo so fake agents never pass as real. */
+export function drawDemoTag(ctx: Ctx): void {
+	const tag = renderText("demo", PAL.neonMagenta);
+	ctx.globalAlpha = 0.55;
+	ctx.drawImage(tag, VW - tag.width - 4, VH - tag.height - 4);
+	ctx.globalAlpha = 1;
+}

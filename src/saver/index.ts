@@ -1,19 +1,35 @@
-// THROWAWAY feasibility probe — replaced in Task 4.
-const out = document.getElementById("out") as HTMLPreElement;
-const handler = (globalThis as any).webkit?.messageHandlers?.herdr;
+import { Game } from "../mainview/game";
+import { FakeSource } from "../shared/fake";
+import { HerdrPoller } from "../shared/herdr-core";
+import { LiveOrDemoSource, NativeHerdrSource, webkitBridge } from "./source";
 
-async function probe(): Promise<void> {
-  if (!handler) {
-    out.textContent = "no bridge (preview or plain browser)";
-    return;
-  }
-  try {
-    const reply = await handler.postMessage({ cmd: "list" });
-    out.textContent = JSON.stringify(reply, null, 2);
-  } catch (e) {
-    out.textContent = `bridge error: ${String(e)}`;
-  }
-}
+const canvas = document.getElementById("game") as HTMLCanvasElement;
+const game = new Game(canvas);
 
-void probe();
-setInterval(probe, 2000);
+// the System Settings thumbnail never spawns herdr (no bridge is registered)
+const preview = (globalThis as any).AGENTVIEW_PREVIEW === true;
+const bridge = preview ? null : webkitBridge();
+const source = new LiveOrDemoSource(
+	bridge ? new NativeHerdrSource(bridge) : null,
+	new FakeSource("loop", { outage: false }),
+);
+const poller = new HerdrPoller(source, (snap) => {
+	game.demo = source.isDemo;
+	game.onSnapshot(snap);
+});
+
+/** Called by AgentViewSaverView on start/stop and screensaver willstop. */
+(globalThis as any).saver = {
+	pause(): void {
+		poller.stop();
+		game.stop();
+	},
+	resume(): void {
+		void poller.start();
+		game.start();
+	},
+};
+
+window.addEventListener("resize", () => game.resize());
+void poller.start();
+game.start();

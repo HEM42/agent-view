@@ -3,7 +3,7 @@ import { Cat } from "./characters/cat";
 import { Renderer } from "./renderer";
 import { Scene } from "./scene/scene";
 import { BubbleLayer } from "./ui/bubble";
-import { drawNametagsHud, drawOffline } from "./ui/hud";
+import { drawDemoTag, drawNametagsHud, drawOffline } from "./ui/hud";
 import { World } from "./world";
 
 const TICK_MS = 1000 / 60;
@@ -17,6 +17,9 @@ export class Game {
 	private cat = new Cat();
 	private acc = 0;
 	private last = performance.now();
+	private raf = 0;
+	/** screensaver: true while the room shows the scripted demo */
+	demo = false;
 
 	constructor(canvas: HTMLCanvasElement) {
 		this.renderer = new Renderer(canvas);
@@ -35,6 +38,8 @@ export class Game {
 	}
 
 	start(): void {
+		if (this.raf) return; // already running
+		this.last = performance.now();
 		const frame = (now: number) => {
 			this.acc = Math.min(this.acc + (now - this.last), MAX_ACC_MS);
 			this.last = now;
@@ -45,9 +50,14 @@ export class Game {
 				this.acc -= TICK_MS;
 			}
 			this.draw(now);
-			requestAnimationFrame(frame);
+			this.raf = requestAnimationFrame(frame);
 		};
-		requestAnimationFrame(frame);
+		this.raf = requestAnimationFrame(frame);
+	}
+
+	stop(): void {
+		cancelAnimationFrame(this.raf);
+		this.raf = 0;
 	}
 
 	private draw(now: number): void {
@@ -67,6 +77,7 @@ export class Game {
 			);
 		}
 
+		if (this.demo) drawDemoTag(ctx);
 		this.scene.overlay(ctx);
 		this.renderer.present(this.scene.effects.jitterFrame(now));
 		// nametags live on the HUD layer at fixed size, above the scaled scene

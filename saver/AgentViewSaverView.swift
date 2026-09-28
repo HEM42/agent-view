@@ -34,6 +34,12 @@ final class AgentViewSaverView: ScreenSaverView {
 			content.addScriptMessageHandler(HerdrBridge(), contentWorld: .page, name: "herdr")
 		}
 		let web = WKWebView(frame: bounds, configuration: config)
+		// legacyScreenSaver's window is visible, but WebKit's occlusion tracking
+		// marks the page hidden there: no requestAnimationFrame, throttled timers,
+		// a blank screen. Private SPI; skipped if a future WebKit drops it.
+		if web.responds(to: NSSelectorFromString("_setWindowOcclusionDetectionEnabled:")) {
+			web.setValue(false, forKey: "windowOcclusionDetectionEnabled")
+		}
 		web.autoresizingMask = [.width, .height]
 		addSubview(web)
 		let root = Bundle(for: Self.self).resourceURL!.appendingPathComponent("web")

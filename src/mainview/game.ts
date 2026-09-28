@@ -58,6 +58,7 @@ export class Game {
 	stop(): void {
 		cancelAnimationFrame(this.raf);
 		this.raf = 0;
+		this.world.forgetLink();
 	}
 
 	private draw(now: number): void {

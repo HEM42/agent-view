@@ -77,6 +77,11 @@ export class World {
 		return this.lastMessageAt > 0 && now - this.lastMessageAt > LINK_LOST_MS;
 	}
 
+	/** screensaver: called on pause so a resume never judges link-lost against a stale timestamp */
+	forgetLink(): void {
+		this.lastMessageAt = 0;
+	}
+
 	update(dtMs: number, now: number): void {
 		// staggered walk-ins: agents file in through the door one by one
 		if (this.spawnQueue.length > 0 && now - this.lastSpawnAt >= SPAWN_STAGGER_MS) {

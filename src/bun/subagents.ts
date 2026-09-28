@@ -60,7 +60,7 @@ export interface StartFile {
 }
 
 export interface PaneFiles {
-	sessionId: string | null; // from session.json
+	sessions: { id: string; mtimeMs: number }[]; // from session-<id>.json, one per Claude session in the pane
 	starts: StartFile[];
 	alive: Map<string, number>; // agent_id -> .alive mtime
 	lastStop: { sessionId: string | null; taskIds: Set<string> | null; mtimeMs: number } | null;
@@ -72,9 +72,18 @@ export function foldPane(files: PaneFiles, now: number): { live: StartFile[]; ex
 	const live: StartFile[] = [];
 	const expired: string[] = [];
 	const stop = files.lastStop;
+	let newest: PaneFiles["sessions"][number] | null = null;
+	for (const x of files.sessions) if (newest === null || x.mtimeMs > newest.mtimeMs) newest = x;
 	for (const s of files.starts) {
 		const lastSeen = Math.max(s.mtimeMs, files.alive.get(s.agentId) ?? 0);
-		const otherSession = files.sessionId !== null && s.sessionId !== null && s.sessionId !== files.sessionId;
+		// a newer session took over the pane and this one has shown no life since (a nested claude's parent keeps
+		// heartbeating); a start without a session file (hook installed mid-session) only goes stale
+		const superseded =
+			newest !== null &&
+			s.sessionId !== null &&
+			s.sessionId !== newest.id &&
+			files.sessions.some((x) => x.id === s.sessionId) &&
+			lastSeen < newest.mtimeMs;
 		const stale = now - lastSeen > STALE_AFTER_MS;
 		// a later SubagentStop lists the session's running background tasks: absent = its own stop was missed
 		const missedStop =
@@ -84,7 +93,7 @@ export function foldPane(files: PaneFiles, now: number): { live: StartFile[]; ex
 			stop.sessionId === s.sessionId &&
 			files.meta.get(s.agentId)?.background === true &&
 			!stop.taskIds.has(s.agentId);
-		if (otherSession || stale || missedStop) expired.push(s.agentId);
+		if (superseded || stale || missedStop) expired.push(s.agentId);
 		else live.push(s);
 	}
 	return { live, expired };
@@ -194,14 +203,17 @@ export class SubagentStore {
 	}
 
 	private async readPane(dir: string, now: number): Promise<Subagent[]> {
-		const files: PaneFiles = { sessionId: null, starts: [], alive: new Map(), lastStop: null, meta: new Map() };
+		const files: PaneFiles = { sessions: [], starts: [], alive: new Map(), lastStop: null, meta: new Map() };
+		const staleSessions: { name: string; id: string | null }[] = [];
 		for (const name of await readdir(dir)) {
 			const path = join(dir, name);
 			const st = await stat(path).catch(() => null);
 			if (!st) continue; // the hook removed it mid-read
-			if (name === "session.json") {
+			if (name.startsWith("session-") && name.endsWith(".json")) {
 				const j = parseJson(await readText(path));
-				files.sessionId = typeof j?.session_id === "string" ? j.session_id : null;
+				const id = typeof j?.session_id === "string" ? j.session_id : null;
+				if (id !== null) files.sessions.push({ id, mtimeMs: st.mtimeMs });
+				if (now - st.mtimeMs > STALE_AFTER_MS) staleSessions.push({ name, id });
 			} else if (name === "last-stop.json") {
 				files.lastStop = parseLastStop(await readText(path), st.mtimeMs);
 			} else if (name.endsWith(".alive")) {
@@ -220,6 +232,9 @@ export class SubagentStore {
 		for (const id of expired) {
 			await unlink(join(dir, `${id}.start.json`)).catch(() => {});
 			await unlink(join(dir, `${id}.alive`)).catch(() => {});
+		}
+		for (const { name, id } of staleSessions) {
+			if (id === null || !live.some((s) => s.sessionId === id)) await unlink(join(dir, name)).catch(() => {});
 		}
 		return live
 			.map((s): Subagent => {

@@ -101,7 +101,7 @@ describe("agent-view-hook.sh", () => {
 	test("SessionStart and SubagentStart write their payloads", async () => {
 		expect(await hook("SessionStart", P.sessionStart)).toBe(0);
 		expect(await hook("SubagentStart", P.subagentStart)).toBe(0);
-		expect(JSON.parse(await readFile(join(paneDir(), "session.json"), "utf8")).session_id).toBe(SID);
+		expect(JSON.parse(await readFile(join(paneDir(), `session-${SID}.json`), "utf8")).session_id).toBe(SID);
 		expect(JSON.parse(await readFile(join(paneDir(), `${AID}.start.json`), "utf8")).agent_type).toBe("Explore");
 		expect((await readdir(paneDir())).filter((n) => n.startsWith("."))).toEqual([]); // no temp files left
 	});
@@ -133,10 +133,35 @@ describe("agent-view-hook.sh", () => {
 		expect(names).not.toContain(`${AID}.alive`);
 	});
 
-	test("SessionEnd removes the pane directory", async () => {
+	test("SessionEnd removes the session's files and the then empty pane directory", async () => {
+		await hook("SessionStart", P.sessionStart);
 		await hook("SubagentStart", P.subagentStart);
+		await hook("PreToolUse", P.subagentToolUse);
 		expect(await hook("SessionEnd", P.sessionEnd)).toBe(0);
 		expect(existsSync(paneDir())).toBe(false);
+	});
+
+	test("a nested session in the same pane leaves the parent's files alone", async () => {
+		const CHILD = "0c1d2e3f-4a5b-6c7d-8e9f-a0b1c2d3e4f5";
+		const child = (p: string) => p.replace(SID, CHILD);
+		await hook("SessionStart", P.sessionStart);
+		await hook("SubagentStart", P.subagentStart);
+		expect(await hook("SessionStart", child(P.sessionStart))).toBe(0);
+		expect(existsSync(join(paneDir(), `session-${CHILD}.json`))).toBe(true);
+		expect(await hook("SessionEnd", child(P.sessionEnd))).toBe(0);
+		const names = await readdir(paneDir());
+		expect(names).toContain(`session-${SID}.json`);
+		expect(names).toContain(`${AID}.start.json`);
+		expect(names).not.toContain(`session-${CHILD}.json`);
+	});
+
+	test("session files use the sanitized session_id; without one, session events do nothing", async () => {
+		await hook("SessionStart", P.sessionStart.replace(SID, "a/b c"));
+		expect(await readdir(paneDir())).toEqual(["session-a_b_c.json"]);
+		await hook("SubagentStart", P.subagentStart);
+		expect(await hook("SessionStart", '{"hook_event_name":"SessionStart"}')).toBe(0);
+		expect(await hook("SessionEnd", '{"hook_event_name":"SessionEnd"}')).toBe(0);
+		expect((await readdir(paneDir())).sort()).toEqual([`${AID}.start.json`, "session-a_b_c.json"]);
 	});
 
 	test("no HERDR_PANE_ID: nothing is written", async () => {

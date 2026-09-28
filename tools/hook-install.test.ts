@@ -129,7 +129,7 @@ describe("install / uninstall", () => {
 			env: { PATH: process.env["PATH"] ?? "/usr/bin:/bin", HOME: home, HERDR_PANE_ID: "wV:p2" },
 		});
 		expect(await proc.exited).toBe(0);
-		expect(existsSync(join(paths(home).data, "wV_p2", "session.json"))).toBe(true);
+		expect(existsSync(join(paths(home).data, "wV_p2", "session-s1.json"))).toBe(true);
 	});
 
 	test("the installed command runs from sh -c with apostrophe in the path", async () => {
@@ -143,7 +143,7 @@ describe("install / uninstall", () => {
 			env: { PATH: process.env["PATH"] ?? "/usr/bin:/bin", HOME: homeWithQuote, HERDR_PANE_ID: "wV:p2" },
 		});
 		expect(await proc.exited).toBe(0);
-		expect(existsSync(join(paths(homeWithQuote).data, "wV_p2", "session.json"))).toBe(true);
+		expect(existsSync(join(paths(homeWithQuote).data, "wV_p2", "session-s1.json"))).toBe(true);
 	});
 });
 

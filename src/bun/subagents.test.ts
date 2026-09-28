@@ -18,6 +18,7 @@ import {
 } from "./subagents";
 
 const SID = "19a1572d-3c89-41ef-8eea-7171bd698c71";
+const CHILD = "0c1d2e3f-4a5b-6c7d-8e9f-a0b1c2d3e4f5";
 const NOW = 1_800_000_000_000;
 
 const start = (agentId: string, mtimeMs: number, sessionId: string | null = SID): StartFile => ({
@@ -29,7 +30,7 @@ const start = (agentId: string, mtimeMs: number, sessionId: string | null = SID)
 });
 
 const pane = (over: Partial<PaneFiles>): PaneFiles => ({
-	sessionId: SID,
+	sessions: [{ id: SID, mtimeMs: NOW - 60_000 }],
 	starts: [],
 	alive: new Map(),
 	lastStop: null,
@@ -67,14 +68,39 @@ describe("foldPane", () => {
 		expect(r.expired).toEqual([]);
 	});
 
-	test("a start from another session expires", () => {
-		const r = foldPane(pane({ starts: [start("a1", NOW, "old-session")] }), NOW);
-		expect(r.expired).toEqual(["a1"]);
+	test("a single session never expires its own starts", () => {
+		const r = foldPane(pane({ starts: [start("a1", NOW - 50_000)] }), NOW);
+		expect(r.live).toHaveLength(1);
 	});
 
-	test("no session.json yet (hook installed mid-session) keeps the start", () => {
-		const r = foldPane(pane({ sessionId: null, starts: [start("a1", NOW)] }), NOW);
-		expect(r.live).toHaveLength(1);
+	test("a newer session expires an older session's start with no life since", () => {
+		const sessions = [
+			{ id: SID, mtimeMs: NOW - 60_000 },
+			{ id: CHILD, mtimeMs: NOW - 5000 },
+		];
+		const starts = [start("a1", NOW - 30_000)];
+		expect(foldPane(pane({ sessions, starts }), NOW).expired).toEqual(["a1"]);
+		const quiet = new Map([["a1", NOW - 10_000]]);
+		expect(foldPane(pane({ sessions, starts, alive: quiet }), NOW).expired).toEqual(["a1"]);
+		const newest = [start("c1", NOW - 1000, CHILD)];
+		expect(foldPane(pane({ sessions, starts: newest }), NOW).live).toHaveLength(1);
+	});
+
+	test("an older session's start that heartbeats after the newer session started stays (nested claude)", () => {
+		const sessions = [
+			{ id: SID, mtimeMs: NOW - 60_000 },
+			{ id: CHILD, mtimeMs: NOW - 5000 },
+		];
+		const alive = new Map([["a1", NOW - 1000]]);
+		expect(foldPane(pane({ sessions, starts: [start("a1", NOW - 30_000)], alive }), NOW).live).toHaveLength(1);
+	});
+
+	test("no session file for the start's session (hook installed mid-session): only the stale window applies", () => {
+		expect(foldPane(pane({ sessions: [], starts: [start("a1", NOW - 30_000)] }), NOW).live).toHaveLength(1);
+		const sessions = [{ id: CHILD, mtimeMs: NOW - 5000 }];
+		expect(foldPane(pane({ sessions, starts: [start("a1", NOW - 30_000)] }), NOW).live).toHaveLength(1);
+		const old = NOW - STALE_AFTER_MS - 1;
+		expect(foldPane(pane({ sessions: [], starts: [start("a1", old)] }), NOW).expired).toEqual(["a1"]);
 	});
 
 	test("stale without heartbeat expires; a recent heartbeat keeps it", () => {
@@ -158,7 +184,8 @@ describe("SubagentStore.read", () => {
 				NOW,
 			);
 			const now = Math.floor(Date.now() / 1000) * 1000; // whole seconds: mtimes round-trip exactly
-			await put(join(dir, "session.json"), JSON.stringify({ session_id: SID }), now);
+			await put(join(dir, "session-gone.json"), JSON.stringify({ session_id: "gone" }), now - 10_000);
+			await put(join(dir, `session-${SID}.json`), JSON.stringify({ session_id: SID }), now - 5000);
 			await put(
 				join(dir, "a1.start.json"),
 				JSON.stringify({ session_id: SID, agent_id: "a1", agent_type: "Explore", transcript_path: tp }),
@@ -167,7 +194,7 @@ describe("SubagentStore.read", () => {
 			await put(
 				join(dir, "old.start.json"),
 				JSON.stringify({ session_id: "gone", agent_id: "old", agent_type: "Plan", transcript_path: tp }),
-				now - 3000,
+				now - 9000,
 			);
 			await put(join(dir, "junk.start.json"), "not json", now);
 
@@ -176,8 +203,33 @@ describe("SubagentStore.read", () => {
 				{ id: "a1", type: "Explore", startedAt: Math.round(now - 2000), description: "probe the folder" },
 			]);
 			const left = await readdir(dir);
-			expect(left).not.toContain("old.start.json"); // other session: deleted
+			expect(left).not.toContain("old.start.json"); // superseded by a newer session: deleted
 			expect(left).toContain("junk.start.json"); // garbage but fresh: left alone
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	test("stale session files without live starts are deleted", async () => {
+		const root = await tempRoot();
+		try {
+			const dir = join(root, "p");
+			await mkdir(dir, { recursive: true });
+			const now = Math.floor(Date.now() / 1000) * 1000;
+			const old = now - STALE_AFTER_MS - 1000;
+			await put(join(dir, "session-ended.json"), JSON.stringify({ session_id: "ended" }), old);
+			await put(join(dir, "session-junk.json"), "not json", old);
+			await put(join(dir, "session-fresh.json"), JSON.stringify({ session_id: "fresh" }), now - 2000);
+			await put(join(dir, `session-${SID}.json`), JSON.stringify({ session_id: SID }), old);
+			await put(join(dir, "a1.start.json"), JSON.stringify({ session_id: SID, agent_id: "a1" }), old);
+			await put(join(dir, "a1.alive"), "", now - 1000);
+
+			expect((await new SubagentStore(root).read(now)).get("p")!.map((s) => s.id)).toEqual(["a1"]);
+			const left = await readdir(dir);
+			expect(left).not.toContain("session-ended.json"); // stale, nothing live in it
+			expect(left).not.toContain("session-junk.json");
+			expect(left).toContain("session-fresh.json");
+			expect(left).toContain(`session-${SID}.json`); // stale but a1 still heartbeats
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}

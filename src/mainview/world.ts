@@ -1,4 +1,4 @@
-import type { AgentView, Snapshot } from "../shared/types";
+import type { AgentView, Snapshot, Subagent } from "../shared/types";
 import {
 	animFor,
 	createCharacter,
@@ -7,6 +7,7 @@ import {
 	stateMatchesStatus,
 	type Character,
 } from "./characters/character";
+import { deskSpot, droneHitBox, plusHitBox, swarmPos, type Box, type Drone } from "./characters/drone";
 import {
 	applyStatus,
 	arrive,
@@ -14,6 +15,7 @@ import {
 	updateLongIdle,
 } from "./characters/fsm";
 import { step } from "./characters/locomotion";
+import { DroneFleet, type Overflow } from "./drones";
 import { SlotManager } from "./scene/slots";
 import type { Vec2 } from "./scene/layout";
 
@@ -22,6 +24,12 @@ const RETRY_MS = 1500;
 /** How long without a reconcile() before the renderer shows link-lost. */
 export const LINK_LOST_MS = 5000;
 
+export type DronePick =
+	| { kind: "drone"; drone: Drone; parentId: string }
+	| { kind: "more"; overflow: Overflow; parentId: string };
+
+const inside = (p: Vec2, b: Box) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+
 export class World {
 	chars = new Map<string, Character>();
 	slots = new SlotManager();
@@ -29,11 +37,13 @@ export class World {
 	offlineReason: string | null = null;
 	/** bumped whenever someone passes the door; scene plays the slide anim */
 	doorPulseAt = 0;
+	readonly fleet = new DroneFleet();
 
 	private spawnQueue: AgentView[] = [];
 	private lastSpawnAt = 0;
 	private lastMessageAt = 0;
 	private latest = new Map<string, AgentView>();
+	private subagents = new Map<string, Subagent[]>();
 
 	reconcile(snap: Snapshot, now: number): void {
 		this.lastMessageAt = now;
@@ -46,6 +56,7 @@ export class World {
 		for (const view of snap.agents) {
 			seen.add(view.id);
 			this.latest.set(view.id, view);
+			this.subagents.set(view.id, view.subagents);
 			const c = this.chars.get(view.id);
 			if (c) {
 				c.gone = false;
@@ -72,6 +83,9 @@ export class World {
 		for (const id of this.latest.keys()) {
 			if (!seen.has(id)) this.latest.delete(id);
 		}
+		for (const id of this.subagents.keys()) {
+			if (!seen.has(id)) this.subagents.delete(id);
+		}
 	}
 
 	linkLost(now: number): boolean {
@@ -97,6 +111,22 @@ export class World {
 		for (const c of this.chars.values()) {
 			this.updateChar(c, dtMs, now);
 		}
+
+		this.fleet.sync(
+			[...this.chars.values()]
+				.filter((c) => !c.gone)
+				.map((c) => {
+					const subagents = this.subagents.get(c.id) ?? [];
+					return {
+						id: c.id,
+						accent: c.accent,
+						subagents,
+						deskId: subagents.length > 0 ? this.slots.ownDesk(c.id) : this.slots.ownedDesk(c.id),
+					};
+				}),
+			now,
+			Date.now(),
+		);
 	}
 
 	private updateChar(c: Character, dtMs: number, now: number): void {
@@ -172,6 +202,20 @@ export class World {
 			) {
 				return c;
 			}
+		}
+		return null;
+	}
+
+	/** Drones sit on top of everything at their desk: checked before characters. */
+	pickDrone(p: Vec2, now: number): DronePick | null {
+		for (const d of this.fleet.drones()) {
+			const desk = deskSpot(d.deskId);
+			if (d.leavingAt !== null || !desk) continue;
+			if (inside(p, droneHitBox(swarmPos(d, desk, now)))) return { kind: "drone", drone: d, parentId: d.parentId };
+		}
+		for (const o of this.fleet.overflows()) {
+			const desk = deskSpot(o.deskId);
+			if (desk && inside(p, plusHitBox(desk, o.hidden.length))) return { kind: "more", overflow: o, parentId: o.parentId };
 		}
 		return null;
 	}

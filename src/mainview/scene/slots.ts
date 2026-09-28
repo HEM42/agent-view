@@ -135,6 +135,27 @@ export class SlotManager {
 		return null;
 	}
 
+	ownedDesk(charId: string): string | null {
+		return this.deskOwners.get(charId) ?? null;
+	}
+
+	/**
+	 * Own a desk without sitting down: an agent that has only ever idled still
+	 * needs one for its subagent drones. Null only when all 15 are owned.
+	 */
+	ownDesk(charId: string): string | null {
+		const owned = this.deskOwners.get(charId);
+		if (owned) return owned;
+		for (const d of DESKS) {
+			const slot = this.byId(d.id)!;
+			if (!this.deskOwnedBySomeoneElse(slot.id, charId) && !slot.occupiedBy) {
+				this.deskOwners.set(charId, slot.id);
+				return slot.id;
+			}
+		}
+		return null;
+	}
+
 	private deskOwnedBySomeoneElse(slotId: string, charId: string): boolean {
 		for (const [owner, id] of this.deskOwners) {
 			if (id === slotId && owner !== charId) return true;

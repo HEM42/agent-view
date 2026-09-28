@@ -42,7 +42,7 @@ final class HerdrBridge: NSObject, WKScriptMessageHandlerWithReply {
 			let attrs = try fm.attributesOfItem(atPath: feedPath)
 			let mtime = attrs[.modificationDate] as? Date ?? .distantPast
 			let age = Date().timeIntervalSince(mtime)
-			guard age <= Self.maxAge else {
+			guard age <= Self.maxAge && age >= -Self.maxAge else {
 				note("stale", String(format: "%.0fs old", age))
 				return ["error": "stale"]
 			}

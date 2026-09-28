@@ -1,4 +1,5 @@
 import { FakeSource } from "../bun/fake";
+import { publishFeed } from "../bun/feed";
 import { HerdrCliSource } from "../bun/herdr";
 import { VERSION } from "../shared/version";
 import { startDaemon, stamp } from "./daemon";
@@ -8,9 +9,12 @@ import { isAddrInUse } from "./server";
 /** agent-view-daemon: `bun run daemon` in a terminal, or a bundled copy under launchd. */
 const fakeMode = process.env["HERDR_FAKE"];
 const port = daemonPort(process.env);
+const source = fakeMode
+	? new FakeSource(fakeMode)
+	: new HerdrCliSource((stdout) => void publishFeed(stdout));
 
 try {
-	startDaemon({ port, source: fakeMode ? new FakeSource(fakeMode) : new HerdrCliSource(), version: VERSION });
+	startDaemon({ port, source, version: VERSION });
 } catch (e) {
 	if (isAddrInUse(e)) {
 		stamp(`EADDRINUSE on 127.0.0.1:${port}`);

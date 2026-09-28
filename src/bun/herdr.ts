@@ -1,5 +1,7 @@
 import { existsSync } from "node:fs";
+import type { Subagent } from "../shared/types";
 import { HerdrError, interpretHerdrResult, type AgentSource, type RawAgent } from "../shared/herdr-core";
+import { joinSubagents } from "./subagents";
 
 export * from "../shared/herdr-core";
 
@@ -64,10 +66,23 @@ async function execHerdr(
 	}
 }
 
+export interface SubagentSource {
+	read(): Promise<Map<string, Subagent[]>>;
+	prune(panes: Iterable<string>): Promise<void>;
+}
+
 export class HerdrCliSource implements AgentSource {
+	/** subagents, when given, joins each agent's running subagents (from the hook's pane directories) into the list. */
+	constructor(private subagents?: SubagentSource) {}
+
 	async list(): Promise<RawAgent[]> {
 		const { code, stdout } = await execHerdr(["agent", "list"]);
-		return interpretHerdrResult(code, stdout);
+		const agents = interpretHerdrResult(code, stdout);
+		if (!this.subagents) return agents;
+		const joined = joinSubagents(agents, await this.subagents.read());
+		// only a successful list may retire pane directories
+		void this.subagents.prune(agents.flatMap((a) => (a.pane_id ? [a.pane_id] : [])));
+		return joined;
 	}
 
 	async focus(id: string): Promise<void> {

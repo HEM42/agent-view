@@ -1,5 +1,6 @@
 import { FakeSource } from "../shared/fake";
 import { HerdrCliSource } from "../bun/herdr";
+import { SubagentStore } from "../bun/subagents";
 import { VERSION } from "../shared/version";
 import { startDaemon, stamp } from "./daemon";
 import { daemonPort } from "./protocol";
@@ -10,7 +11,7 @@ const fakeMode = process.env["HERDR_FAKE"];
 const port = daemonPort(process.env);
 const source = fakeMode
 	? new FakeSource(fakeMode)
-	: new HerdrCliSource();
+	: new HerdrCliSource(new SubagentStore());
 
 try {
 	startDaemon({ port, source, version: VERSION });

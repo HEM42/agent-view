@@ -13,6 +13,8 @@
 		"build": "electrobun build",
 		"build:saver": "sh saver/build.sh",
 		"install:saver": "sh saver/install.sh",
+		"install:hook": "bun tools/hook-install.ts install",
+		"uninstall:hook": "bun tools/hook-install.ts uninstall",
 		"test": "bun test"
 	},
 	"dependencies": {

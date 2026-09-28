@@ -87,38 +87,48 @@ async function readSettings(path: string): Promise<any> {
  * Writes through a symlinked settings.json (dotfile managers) and keeps the file's mode.
  * No change, no write; the backup is only made once, so it keeps the pre-install state.
  */
-async function writeSettings(path: string, before: any, settings: any): Promise<void> {
-	if (JSON.stringify(settings) === JSON.stringify(before)) return;
+async function writeSettings(path: string, before: any, settings: any): Promise<SettingsResult> {
 	await mkdir(dirname(path), { recursive: true });
 	const real = await realpath(path).catch(() => path);
+	const backup = `${real}.agent-view.bak`;
+	const existingBackup = () => (existsSync(backup) ? backup : null);
+	if (JSON.stringify(settings) === JSON.stringify(before)) return { written: false, backup: existingBackup() };
 	const mode = await stat(real)
 		.then((st) => st.mode & 0o7777)
 		.catch(() => null); // null: no file yet
-	const backup = `${real}.agent-view.bak`;
 	if (mode !== null && !existsSync(backup)) await copyFile(real, backup);
 	const tmp = `${real}.agent-view.tmp`;
 	await writeFile(tmp, `${JSON.stringify(settings, null, 2)}\n`);
 	if (mode !== null) await chmod(tmp, mode);
 	await rename(tmp, real);
+	return { written: true, backup: existingBackup() };
 }
 
-export async function install(opts: { home: string; settings: string; source: string }): Promise<void> {
+/** written: settings.json was rewritten; backup: the (resolved) backup file, if one exists. */
+export interface SettingsResult {
+	written: boolean;
+	backup: string | null;
+}
+
+export async function install(opts: { home: string; settings: string; source: string }): Promise<SettingsResult> {
 	const p = paths(opts.home);
 	const settings = await readSettings(opts.settings); // validate before touching anything
 	await mkdir(dirname(p.hook), { recursive: true });
 	await copyFile(opts.source, p.hook);
 	await chmod(p.hook, 0o755);
-	await writeSettings(opts.settings, settings, addHooks(settings, p.hook));
+	return writeSettings(opts.settings, settings, addHooks(settings, p.hook));
 }
 
-export async function uninstall(opts: { home: string; settings: string }): Promise<void> {
+export async function uninstall(opts: { home: string; settings: string }): Promise<SettingsResult> {
 	const p = paths(opts.home);
+	let result: SettingsResult = { written: false, backup: null };
 	if (existsSync(opts.settings)) {
 		const settings = await readSettings(opts.settings);
-		await writeSettings(opts.settings, settings, removeHooks(settings, p.hook));
+		result = await writeSettings(opts.settings, settings, removeHooks(settings, p.hook));
 	}
 	await rm(dirname(p.hook), { recursive: true, force: true });
 	await rm(p.data, { recursive: true, force: true });
+	return result;
 }
 
 const USAGE = "usage: bun tools/hook-install.ts install|uninstall [--settings <path>] [--home <dir>]";
@@ -148,11 +158,14 @@ if (import.meta.main) {
 	const { cmd, home, settings } = args;
 	try {
 		if (cmd === "install") {
-			await install({ home, settings, source: join(import.meta.dir, "..", "hook", "agent-view-hook.sh") });
-			console.log(`installed ${paths(home).hook}\nhooks added to ${settings} (backup: ${settings}.agent-view.bak)`);
+			const r = await install({ home, settings, source: join(import.meta.dir, "..", "hook", "agent-view-hook.sh") });
+			const change = r.written
+				? `hooks added to ${settings}${r.backup ? ` (backup: ${r.backup})` : ""}`
+				: `hooks already present in ${settings}`;
+			console.log(`installed ${paths(home).hook}\n${change}`);
 		} else if (cmd === "uninstall") {
-			await uninstall({ home, settings });
-			console.log(`removed the Agent View hook from ${settings}`);
+			const r = await uninstall({ home, settings });
+			console.log(r.written ? `removed the Agent View hook from ${settings}` : `no Agent View hooks in ${settings}`);
 		} else {
 			console.error(USAGE);
 			process.exit(2);

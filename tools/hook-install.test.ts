@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EVENTS, addHooks, commandFor, install, parseArgs, paths, removeHooks, uninstall } from "./hook-install";
@@ -127,6 +127,24 @@ describe("install / uninstall", () => {
 		expect(JSON.parse(await readFile(settings, "utf8"))).toEqual({ ...OTHER, theme: "dark" });
 	});
 
+	test("install/uninstall report whether settings were rewritten and where the backup is", async () => {
+		const target = join(home, "dotfiles", "claude-settings.json");
+		await mkdir(join(home, "dotfiles"), { recursive: true });
+		await writeFile(target, JSON.stringify(OTHER));
+		await symlink(target, settings);
+		const backup = `${await realpath(target)}.agent-view.bak`; // next to the real file, not the link
+
+		expect(await install({ home, settings, source: SOURCE })).toEqual({ written: true, backup });
+		expect(existsSync(backup)).toBe(true);
+		expect(await install({ home, settings, source: SOURCE })).toEqual({ written: false, backup });
+		expect(await uninstall({ home, settings })).toEqual({ written: true, backup });
+		expect(await uninstall({ home, settings })).toEqual({ written: false, backup });
+	});
+
+	test("no settings file yet: install reports no backup", async () => {
+		expect(await install({ home, settings, source: SOURCE })).toEqual({ written: true, backup: null });
+	});
+
 	test("no settings file yet: install creates one", async () => {
 		await install({ home, settings, source: SOURCE });
 		expect(JSON.parse(await readFile(settings, "utf8")).hooks.SubagentStart).toHaveLength(1);
@@ -203,6 +221,33 @@ describe("command line", () => {
 			expect(await proc.exited).toBe(2);
 			expect(await new Response(proc.stderr).text()).toContain("usage:");
 			expect(await readdir(home)).toEqual([]); // nothing installed anywhere
+		} finally {
+			await rm(home, { recursive: true, force: true });
+		}
+	});
+
+	test("the install message names the real backup, and says so when nothing changed", async () => {
+		const home = await mkdtemp(join(tmpdir(), "agentview-cli-"));
+		try {
+			const target = join(home, "dotfiles", "claude-settings.json");
+			const settings = join(home, ".claude", "settings.json");
+			await mkdir(join(home, "dotfiles"), { recursive: true });
+			await mkdir(join(home, ".claude"), { recursive: true });
+			await writeFile(target, JSON.stringify(OTHER));
+			await symlink(target, settings);
+			const run = async () => {
+				const proc = Bun.spawn([process.execPath, join(import.meta.dir, "hook-install.ts"), "install", "--home", home, "--settings", settings], {
+					cwd: home,
+					stdout: "pipe",
+					stderr: "ignore",
+					env: { PATH: process.env["PATH"] ?? "/usr/bin:/bin", HOME: home },
+				});
+				expect(await proc.exited).toBe(0);
+				return await new Response(proc.stdout).text();
+			};
+			const first = await run();
+			expect(first).toContain(`hooks added to ${settings} (backup: ${await realpath(target)}.agent-view.bak)`);
+			expect(await run()).toContain(`hooks already present in ${settings}`);
 		} finally {
 			await rm(home, { recursive: true, force: true });
 		}

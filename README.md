@@ -99,7 +99,7 @@ For development, `bun run daemon` runs it in the foreground (set `AGENT_VIEW_POR
 ## How it works
 
 - **Daemon** (`src/daemon/`) runs the herdr poller (`HerdrPoller` in
-  `src/bun/herdr.ts`), which normalizes and debounces statuses (2 consecutive
+  `src/shared/herdr-core.ts`), which normalizes and debounces statuses (2 consecutive
   polls to change, except `blocked` which is instant — the raised hand is the
   whole point), and pushes full world snapshots to clients over a WebSocket on
   `127.0.0.1:47371`.

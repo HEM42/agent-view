@@ -79,6 +79,9 @@ The hook only runs inside herdr panes (it keys on `HERDR_PANE_ID`), writes to
 `~/Library/Application Support/Agent View/subagents/`, and never blocks Claude. Without it, the room works as before, with no
 drones.
 
+Run `bun run uninstall:hook` before deleting the app or its Application Support folder; otherwise every Claude tool call runs
+a missing hook command.
+
 ## Screensaver
 
 The same room is also available as a macOS screensaver. Live data comes from

@@ -1,7 +1,7 @@
 import { Electroview } from "electrobun/view";
 import type { AgentViewRPC, Snapshot } from "../shared/types";
 import { Game } from "./game";
-import { droneTooltip, fmtDuration, moreTooltip } from "./ui/tooltip";
+import { droneTooltip, escapeHtml, fmtDuration, moreTooltip } from "./ui/tooltip";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const tooltip = document.getElementById("tooltip") as HTMLDivElement;
@@ -96,7 +96,7 @@ canvas.addEventListener("mousemove", (e) => {
 		return;
 	}
 	showTooltip(
-		`<span class="k">${hit.agent}</span> · ${hit.project}<br>` +
+		`<span class="k">${escapeHtml(hit.agent)}</span> · ${escapeHtml(hit.project)}<br>` +
 			`${STATUS_LABEL[hit.desiredStatus] ?? hit.desiredStatus} — ${fmtDuration(performance.now() - hit.statusSince)}<br>` +
 			`<span class="k">double-click</span> to focus in herdr`,
 		e,

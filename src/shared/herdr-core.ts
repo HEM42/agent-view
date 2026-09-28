@@ -104,7 +104,7 @@ export function interpretHerdrResult(code: number, stdout: string): RawAgent[] {
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export const STABLE_TICKS = 2; // status must survive 2 consecutive polls
-const OFFLINE_AFTER = 3; // consecutive failures before declaring offline
+export const OFFLINE_AFTER = 3; // consecutive failures before declaring offline
 
 interface DebounceEntry {
 	confirmed: AgentStatus;

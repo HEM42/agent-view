@@ -1,4 +1,4 @@
-import { HerdrError, interpretHerdrResult, type AgentSource, type RawAgent } from "../shared/herdr-core";
+import { HerdrError, interpretHerdrResult, OFFLINE_AFTER, type AgentSource, type RawAgent } from "../shared/herdr-core";
 
 /**
  * What the Swift HerdrBridge replies with (saver/HerdrBridge.swift): the
@@ -54,8 +54,12 @@ export class NativeHerdrSource implements AgentSource {
 	}
 }
 
-/** Consecutive live failures before the room switches to the demo. */
-export const DEMO_AFTER = 3;
+/**
+ * Consecutive live failures before the room switches to the demo. Must not
+ * exceed OFFLINE_AFTER: the demo has to take over no later than the poller
+ * itself would declare offline, or the OFFLINE banner comes back.
+ */
+export const DEMO_AFTER = OFFLINE_AFTER;
 
 /**
  * Live herdr data when it flows, the scripted demo otherwise — so the
@@ -100,5 +104,6 @@ export class LiveOrDemoSource implements AgentSource {
 		return this.fallback.list();
 	}
 
+	// Intentionally a no-op: the screensaver has nothing to focus.
 	async focus(): Promise<void> {}
 }

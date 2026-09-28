@@ -141,6 +141,15 @@ describe("agent-view-hook.sh", () => {
 		expect(existsSync(paneDir())).toBe(false);
 	});
 
+	test("SessionEnd also drops last-stop.json once nothing else is left", async () => {
+		await hook("SessionStart", P.sessionStart);
+		await hook("SubagentStart", P.subagentStart);
+		await hook("SubagentStop", P.subagentStop);
+		expect(await readdir(paneDir())).toContain("last-stop.json");
+		expect(await hook("SessionEnd", P.sessionEnd)).toBe(0);
+		expect(existsSync(paneDir())).toBe(false);
+	});
+
 	test("a nested session in the same pane leaves the parent's files alone", async () => {
 		const CHILD = "0c1d2e3f-4a5b-6c7d-8e9f-a0b1c2d3e4f5";
 		const child = (p: string) => p.replace(SID, CHILD);
@@ -148,10 +157,12 @@ describe("agent-view-hook.sh", () => {
 		await hook("SubagentStart", P.subagentStart);
 		expect(await hook("SessionStart", child(P.sessionStart))).toBe(0);
 		expect(existsSync(join(paneDir(), `session-${CHILD}.json`))).toBe(true);
+		await hook("SubagentStop", child(P.subagentStop).replace(AID, "0123456789abcdef0"));
 		expect(await hook("SessionEnd", child(P.sessionEnd))).toBe(0);
 		const names = await readdir(paneDir());
 		expect(names).toContain(`session-${SID}.json`);
 		expect(names).toContain(`${AID}.start.json`);
+		expect(names).toContain("last-stop.json"); // the parent's session still needs it
 		expect(names).not.toContain(`session-${CHILD}.json`);
 	});
 

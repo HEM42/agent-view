@@ -54,6 +54,12 @@ SessionEnd)
 		[ -f "$f" ] && grep -qF "\"session_id\":\"$sid\"" "$f" 2>/dev/null &&
 			rm -f "$f" "${f%.start.json}.alive" 2>/dev/null
 	done
+	# last session gone and no subagent left: the stop payload has no one to correct
+	left=0
+	for f in "$dir"/session-*.json "$dir"/*.start.json; do
+		[ -e "$f" ] && left=1
+	done
+	[ "$left" = 0 ] && rm -f "$dir/last-stop.json" 2>/dev/null
 	rmdir "$dir" 2>/dev/null
 	;;
 SubagentStart)

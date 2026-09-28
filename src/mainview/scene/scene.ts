@@ -2,11 +2,13 @@ import { PAL } from "../sprites/palette";
 import { decodeSheet, makeGlowBlob, type DecodedSheet } from "../sprites/pixel";
 import { BAR_SHEET, BED as BED_SHEET, COUCH as COUCH_SHEET, DESK as DESK_SHEET, DOOR as DOOR_SHEET, SCREEN as SCREEN_SHEET, TV as TV_SHEET } from "../sprites/sheets/furniture";
 import { POSTERS as POSTERS_SHEET, SIGN as SIGN_SHEET, SKYLINE, VENT as VENT_SHEET, WINDOW_FRAME } from "../sprites/sheets/room";
+import { DRONE } from "../sprites/sheets/fx";
 import type { World } from "../world";
 import { hopOffset, type Character } from "../characters/character";
 import { accentFor } from "../sprites/palette";
 import { Effects, SIGN_LETTERS } from "./effects";
 import { renderText } from "../ui/font3x5";
+import { SPARK_MS, deskSpot, droneAlpha, plusPos, swarmPos } from "../characters/drone";
 import {
 	BAR,
 	BED,
@@ -40,6 +42,8 @@ export class Scene {
 	private room: DecodedSheet;
 	private background: OffscreenCanvas;
 	private signGlow = new Map<string, OffscreenCanvas>();
+	private droneSheets = new Map<string, DecodedSheet>(); // per accent
+	private plusTags = new Map<string, OffscreenCanvas>(); // per accent + text
 
 	constructor() {
 		this.furniture = decodeSheet(DESK_SHEET);
@@ -263,6 +267,25 @@ export class Scene {
 		}
 	}
 
+	private droneSheet(accent: string): DecodedSheet {
+		let s = this.droneSheets.get(accent);
+		if (!s) {
+			s = decodeSheet(DRONE, { a: accent });
+			this.droneSheets.set(accent, s);
+		}
+		return s;
+	}
+
+	private plusTag(text: string, accent: string): OffscreenCanvas {
+		const key = `${accent}${text}`;
+		let t = this.plusTags.get(key);
+		if (!t) {
+			t = renderText(text, accent);
+			this.plusTags.set(key, t);
+		}
+		return t;
+	}
+
 	// ---- floor entities ----
 
 	private buildEntities(world: World, now: number): Entity[] {
@@ -303,9 +326,8 @@ export class Scene {
 							spot.pos.y - desk.anchorY,
 						);
 					}
-					const screenName = occupied
-						? `screen.${(Math.floor(now / 180) + i) % 3}`
-						: "screen.dim";
+					const busy = occupied || world.fleet.deskBusy(spot.id);
+					const screenName = busy ? `screen.${(Math.floor(now / 180) + i) % 3}` : "screen.dim";
 					const screen = this.furniture.get(screenName);
 					if (screen) {
 						ctx.drawImage(
@@ -328,6 +350,39 @@ export class Scene {
 				},
 			});
 		});
+
+		for (const d of world.fleet.drones()) {
+			const spot = deskSpot(d.deskId);
+			if (!spot) continue;
+			out.push({
+				sortY: spot.pos.y + 0.5,
+				tie: `drone-${d.id}`,
+				draw: (ctx) => {
+					const p = swarmPos(d, spot, now);
+					const age = now - d.bornAt;
+					const sparking = d.spark && age < SPARK_MS;
+					const f = this.droneSheet(d.accent).get(
+						sparking ? `spark.${Math.floor(age / (SPARK_MS / 2)) % 2}` : `drone.${Math.floor(now / 90) % 2}`,
+					);
+					if (!f) return;
+					ctx.globalAlpha = droneAlpha(d, now);
+					ctx.drawImage(f.canvas, p.x + (sparking ? 1 : 0), p.y);
+					ctx.globalAlpha = 1;
+				},
+			});
+		}
+		for (const o of world.fleet.overflows()) {
+			const spot = deskSpot(o.deskId);
+			if (!spot) continue;
+			out.push({
+				sortY: spot.pos.y + 0.5,
+				tie: `more-${o.parentId}`,
+				draw: (ctx) => {
+					const p = plusPos(spot);
+					ctx.drawImage(this.plusTag(`+${o.hidden.length}`, o.accent), p.x, p.y);
+				},
+			});
+		}
 
 		out.push(this.still("couch", COUCH.pos.x, COUCH.pos.y));
 		out.push({
@@ -406,7 +461,7 @@ export class Scene {
 		DESKS.forEach((spot, i) => {
 			if (i >= deskCount) return;
 			const slot = world.slots.byId(spot.id);
-			if (!slot?.occupiedBy) return;
+			if (!slot?.occupiedBy && !world.fleet.deskBusy(spot.id)) return;
 			this.effects.drawScreenCone(ctx, spot.seatPos.x + 4, spot.seatPos.y - 12, now);
 		});
 	}

@@ -7,6 +7,7 @@
  * - CAT: 14x10 ink-black cat "Daemon". All side-view frames FACE RIGHT
  *   (use the pre-flipped variant for left). stare.* faces the viewer.
  * - GLOWDOT: 6x6 pre-rendered LED glow stamp.
+ * - DRONE: 5x3 subagent drone (2-frame rotor; 'a' = eye, swapped to the parent's project accent) and a 3x3 arrival spark.
  */
 
 import type { SpriteSheet } from "../pixel";
@@ -239,5 +240,17 @@ export const GLOWDOT: SpriteSheet = {
 			"..CC..",
 			"......",
 		],
+	},
+};
+
+/** 5x3 subagent drone; anchor top-left. 'a' is swapped per parent. */
+export const DRONE: SpriteSheet = {
+	palette: { r: PAL.lilac, s: PAL.steel, a: PAL.neonCyan, w: PAL.white, c: PAL.neonCyan },
+	anchor: { x: 0, y: 0 },
+	frames: {
+		"drone.0": ["r.r.r", "ssass", ".s.s."],
+		"drone.1": [".r.r.", "ssass", ".s.s."],
+		"spark.0": [".w.", "wcw", ".w."],
+		"spark.1": ["w.w", ".c.", "w.w"],
 	},
 };

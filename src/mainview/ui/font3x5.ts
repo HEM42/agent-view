@@ -1,6 +1,6 @@
 /**
  * 3x5 bitmap micro-font, code-encoded like every other sprite.
- * Glyphs: a-z 0-9 - _ . · space. Input is case-folded to lowercase;
+ * Glyphs: a-z 0-9 - + _ . · space. Input is case-folded to lowercase;
  * glyph forms are caps-style. Advance = 4px per char.
  */
 
@@ -47,6 +47,7 @@ export const GLYPHS: Record<string, string[]> = {
 	"8": ["010", "101", "010", "101", "010"],
 	"9": ["010", "101", "011", "001", "110"],
 	"-": ["000", "000", "111", "000", "000"],
+	"+": ["000", "010", "111", "010", "000"],
 	_: ["000", "000", "000", "000", "111"],
 	".": ["000", "000", "000", "000", "010"],
 	":": ["000", "010", "000", "010", "000"],

@@ -63,14 +63,19 @@ double-click to focus that agent's pane in herdr.
 
 ## Screensaver
 
-The same room is also available as a macOS screensaver. It shows your
-live herdr agents while the Agent View daemon is running, and falls back
-to the demo loop (marked `DEMO`) when it isn't.
+The same room is also available as a macOS screensaver. Live herdr data
+needs the Agent View daemon from a build that includes the feed publisher
+(this branch: `bun run install:daemon`, or `bun run daemon` in the
+foreground) — the current Homebrew release does not write the feed, so
+the saver just shows the demo loop (marked `DEMO`).
 
 The screensaver sandbox can't reach herdr's socket, so the daemon publishes
 each `herdr agent list` result to
 `~/Library/Application Support/Agent View/agents.json` and the
-screensaver reads it; a file older than 3 seconds counts as offline.
+screensaver reads it; a missing or stale feed falls back to the demo
+loop (the saver never shows an offline banner).
+
+Building the saver needs the Xcode Command Line Tools (`swiftc`):
 
 ```bash
 bun run build:saver     # → build/Agent View.saver
@@ -79,8 +84,12 @@ bun run install:saver   # → ~/Library/Screen Savers/
 
 Then pick **Agent View** under System Settings → Wallpaper → Other
 (older macOS: System Settings → Screen Saver). Feed transitions are
-logged:
+logged — look for `feed: ok`:
 `log show --last 10m --predicate 'subsystem == "com.cygnisec.agentview.saver"'`.
+
+To uninstall, remove `~/Library/Screen Savers/Agent View.saver` (and
+optionally the feed, `~/Library/Application Support/Agent View/agents.json`;
+the rest of that folder belongs to the daemon).
 
 ## Run from source
 

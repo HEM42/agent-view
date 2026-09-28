@@ -41,6 +41,12 @@ describe("addHooks / removeHooks", () => {
 	test("commands quote the path (it contains spaces)", () => {
 		expect(commandFor(HOOK, "SubagentStart")).toBe(`'${HOOK}' SubagentStart`);
 	});
+
+	test("commands properly escape apostrophes in the path", () => {
+		const pathWithQuote = "/Users/john/o'brien/hook.sh";
+		const cmd = commandFor(pathWithQuote, "SessionStart");
+		expect(cmd).toBe(`'/Users/john/o'\\''brien/hook.sh' SessionStart`);
+	});
 });
 
 describe("install / uninstall", () => {
@@ -96,5 +102,26 @@ describe("install / uninstall", () => {
 		});
 		expect(await proc.exited).toBe(0);
 		expect(existsSync(join(paths(home).data, "wV_p2", "session.json"))).toBe(true);
+	});
+
+	test("the installed command runs from sh -c with apostrophe in the path", async () => {
+		const homeWithQuote = join(home, "o'brien");
+		const settingsWithQuote = join(homeWithQuote, ".claude", "settings.json");
+		await mkdir(join(homeWithQuote, ".claude"), { recursive: true });
+		await install({ home: homeWithQuote, settings: settingsWithQuote, source: SOURCE });
+		const cmd = commandFor(paths(homeWithQuote).hook, "SessionStart");
+		const proc = Bun.spawn(["sh", "-c", cmd], {
+			stdin: new Blob(['{"session_id":"s1","hook_event_name":"SessionStart"}']),
+			env: { PATH: process.env["PATH"] ?? "/usr/bin:/bin", HOME: homeWithQuote, HERDR_PANE_ID: "wV:p2" },
+		});
+		expect(await proc.exited).toBe(0);
+		expect(existsSync(join(paths(homeWithQuote).data, "wV_p2", "session.json"))).toBe(true);
+	});
+});
+
+describe("apostrophe in path", () => {
+	test("removeHooks restores original when path has apostrophe", () => {
+		const apostrophePath = "/Users/john/Library/Application Support/Agent View/hook/o'brien-hook.sh";
+		expect(removeHooks(addHooks(OTHER, apostrophePath), apostrophePath)).toEqual(OTHER);
 	});
 });

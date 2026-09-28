@@ -14,6 +14,10 @@ import { dirname, join } from "node:path";
 
 export const EVENTS = ["SessionStart", "SessionEnd", "SubagentStart", "SubagentStop", "PreToolUse"] as const;
 
+function shQuote(s: string): string {
+	return `'${s.replace(/'/g, "'\\''")}'`;
+}
+
 export function paths(home: string): { hook: string; data: string; settings: string } {
 	const appDir = join(home, "Library", "Application Support", "Agent View");
 	return {
@@ -24,7 +28,7 @@ export function paths(home: string): { hook: string; data: string; settings: str
 }
 
 export function commandFor(hookPath: string, event: string): string {
-	return `'${hookPath}' ${event}`;
+	return `${shQuote(hookPath)} ${event}`;
 }
 
 export function addHooks(settings: any, hookPath: string): any {
@@ -43,7 +47,7 @@ export function addHooks(settings: any, hookPath: string): any {
 export function removeHooks(settings: any, hookPath: string): any {
 	const out = structuredClone(settings ?? {});
 	if (!out.hooks || typeof out.hooks !== "object") return out;
-	const prefix = `'${hookPath}'`;
+	const prefix = shQuote(hookPath);
 	const ours = (h: any) => typeof h?.command === "string" && h.command.startsWith(prefix);
 	let touched = false;
 	for (const ev of Object.keys(out.hooks)) {

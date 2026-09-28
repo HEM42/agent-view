@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EVENTS, addHooks, commandFor, install, paths, removeHooks, uninstall } from "./hook-install";
@@ -78,6 +78,34 @@ describe("install / uninstall", () => {
 		expect(JSON.parse(await readFile(settings, "utf8"))).toEqual(OTHER);
 		expect(existsSync(p.hook)).toBe(false);
 		expect(existsSync(p.data)).toBe(false);
+	});
+
+	test("a symlinked settings.json stays a link; the target gets the hooks and keeps its mode", async () => {
+		const target = join(home, "dotfiles", "claude-settings.json");
+		await mkdir(join(home, "dotfiles"), { recursive: true });
+		await writeFile(target, JSON.stringify(OTHER));
+		await chmod(target, 0o600);
+		await symlink(target, settings);
+		const p = paths(home);
+
+		await install({ home, settings, source: SOURCE });
+		expect((await lstat(settings)).isSymbolicLink()).toBe(true);
+		expect(JSON.parse(await readFile(target, "utf8"))).toEqual(addHooks(OTHER, p.hook));
+		expect((await stat(target)).mode & 0o777).toBe(0o600);
+
+		await uninstall({ home, settings });
+		expect((await lstat(settings)).isSymbolicLink()).toBe(true);
+		expect(JSON.parse(await readFile(target, "utf8"))).toEqual(OTHER);
+		expect((await stat(target)).mode & 0o777).toBe(0o600);
+	});
+
+	test("a regular settings.json keeps its mode", async () => {
+		await writeFile(settings, JSON.stringify(OTHER));
+		await chmod(settings, 0o600);
+		await install({ home, settings, source: SOURCE });
+		expect((await stat(settings)).mode & 0o777).toBe(0o600);
+		await uninstall({ home, settings });
+		expect((await stat(settings)).mode & 0o777).toBe(0o600);
 	});
 
 	test("no settings file yet: install creates one", async () => {

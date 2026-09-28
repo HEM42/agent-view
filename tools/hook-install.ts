@@ -8,7 +8,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { chmod, copyFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -83,12 +83,18 @@ async function readSettings(path: string): Promise<any> {
 	}
 }
 
+/** Writes through a symlinked settings.json (dotfile managers) and keeps the file's mode. */
 async function writeSettings(path: string, settings: any): Promise<void> {
 	await mkdir(dirname(path), { recursive: true });
-	if (existsSync(path)) await copyFile(path, `${path}.agent-view.bak`);
-	const tmp = `${path}.agent-view.tmp`;
+	const real = await realpath(path).catch(() => path);
+	const mode = await stat(real)
+		.then((st) => st.mode & 0o7777)
+		.catch(() => null); // null: no file yet
+	if (mode !== null) await copyFile(real, `${real}.agent-view.bak`);
+	const tmp = `${real}.agent-view.tmp`;
 	await writeFile(tmp, `${JSON.stringify(settings, null, 2)}\n`);
-	await rename(tmp, path);
+	if (mode !== null) await chmod(tmp, mode);
+	await rename(tmp, real);
 }
 
 export async function install(opts: { home: string; settings: string; source: string }): Promise<void> {

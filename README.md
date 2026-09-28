@@ -16,6 +16,7 @@ stuck waiting for you, and who is slacking off in front of the TV.
 | `idle` | couch & TV first; ramen bar when the couch is full; bed after ~5 min |
 | `unknown` | stands around confused — `?` |
 | pane closed | walks out through the sliding door |
+| subagent running (Claude Code) | a small drone swarms above the parent's desk; 6 max, then `+N` |
 
 ## Install
 
@@ -54,12 +55,29 @@ there is nothing extra to set up.
   blocked agent for more than a minute, walks to that desk and stares at you.
 - **Offline is explicit:** if herdr or the daemon is down you get a blacked-out room and a
   flickering OFFLINE banner — never silently stale data.
+- **Subagents** (Claude Code only, needs the hook below) swarm as drones
+  above their parent's desk — and stay there when the parent goes lounging,
+  so the desk's screen reads "work still running". Hover a drone for its
+  type, task and runtime.
 
 ## Interaction
 
 The window is a frameless neon widget: drag it by the title strip, `◎` pins
 it always-on-top, `×` quits. Hover a character for status details;
 double-click to focus that agent's pane in herdr.
+
+## Subagents
+
+Agent View learns about Claude Code subagents from a small hook script. Install it from a checkout:
+
+```bash
+bun run install:hook     # copies the hook, adds 5 entries to ~/.claude/settings.json (backup: settings.json.agent-view.bak)
+bun run uninstall:hook   # removes exactly those entries, the script and its data
+```
+
+The hook only runs inside herdr panes (it keys on `HERDR_PANE_ID`), writes to
+`~/Library/Application Support/Agent View/subagents/`, and never blocks Claude. Without it, the room works as before, with no
+drones.
 
 ## Screensaver
 

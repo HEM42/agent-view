@@ -129,6 +129,14 @@ describe("LiveOrDemoSource", () => {
 		expect(s.isDemo).toBe(false);
 	});
 
+	test("reset() after live data forgets it: the next failure goes straight to demo", async () => {
+		const s = new LiveOrDemoSource(scripted([LIVE, down]), demoSource);
+		expect(await s.list()).toEqual(LIVE);
+		s.reset();
+		expect(await s.list()).toEqual(DEMO);
+		expect(s.isDemo).toBe(true);
+	});
+
 	test("poller over LiveOrDemoSource never reports offline", async () => {
 		const live = scripted([down, LIVE, down, down, down, down, gone, LIVE, down, LIVE]);
 		const p = new HerdrPoller(new LiveOrDemoSource(live, demoSource), () => {});

@@ -85,6 +85,12 @@ export class LiveOrDemoSource implements AgentSource {
 		return this.demo;
 	}
 
+	/** Screensaver: called on pause so a resume never trusts a stale "live" streak. */
+	reset(): void {
+		this.hadLive = false;
+		this.failures = 0;
+	}
+
 	async list(): Promise<RawAgent[]> {
 		if (this.live) {
 			try {

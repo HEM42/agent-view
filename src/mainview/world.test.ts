@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Snapshot } from "../shared/types";
 import { World } from "./world";
 
-const SNAP: Snapshot = { herdrOnline: true, offlineReason: null, agents: [], ts: 0 };
+const SNAP: Snapshot = { herdrOnline: true, agents: [], ts: 0 };
 
 describe("World.forgetLink", () => {
 	test("without forgetLink, a stale lastMessageAt reports link-lost", () => {

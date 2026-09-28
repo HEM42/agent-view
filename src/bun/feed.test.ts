@@ -4,6 +4,13 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { FEED_PATH, publishFeed } from "./feed";
 
+/** The home macOS's directory service has for the current user (what getpwuid reads). */
+function directoryHome(): string {
+	const user = Bun.spawnSync(["/usr/bin/id", "-un"]).stdout.toString().trim();
+	const out = Bun.spawnSync(["/usr/bin/dscl", ".", "-read", `/Users/${user}`, "NFSHomeDirectory"]).stdout.toString();
+	return out.replace(/^NFSHomeDirectory:\s*/, "").trim();
+}
+
 const dirs: string[] = [];
 async function tempDir(): Promise<string> {
 	const d = await mkdtemp(join(tmpdir(), "av-feed-"));
@@ -17,7 +24,20 @@ afterEach(async () => {
 
 describe("publishFeed", () => {
 	test("FEED_PATH is the path the screensaver bridge reads", () => {
-		expect(FEED_PATH).toBe(`${homedir()}/Library/Application Support/Agent View/agents.json`);
+		expect(FEED_PATH).toBe(`${directoryHome()}/Library/Application Support/Agent View/agents.json`);
+	});
+
+	test("FEED_PATH ignores an overridden $HOME, like the bridge's getpwuid lookup", async () => {
+		const home = await tempDir();
+		const proc = Bun.spawn([process.execPath, "-e", `console.log((await import(${JSON.stringify(`${import.meta.dir}/feed.ts`)})).FEED_PATH)`], {
+			stdout: "pipe",
+			env: { PATH: process.env["PATH"] ?? "/usr/bin:/bin", HOME: home },
+		});
+		expect(await proc.exited).toBe(0);
+		expect((await new Response(proc.stdout).text()).trim()).toBe(
+			`${directoryHome()}/Library/Application Support/Agent View/agents.json`,
+		);
+		expect(homedir()).not.toBe(home); // sanity: the override really differed
 	});
 
 	test("creates missing directories and writes the output", async () => {

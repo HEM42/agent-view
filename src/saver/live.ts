@@ -2,7 +2,7 @@ import { parseServerMessage } from "../daemon/protocol";
 import type { Snapshot } from "../shared/types";
 
 /** A pushed world older than this is gone: the daemon sends one at least every second. */
-export const STALE_MS = 3000;
+export const STALE_MS = 3000; // keep STALE_MS + ONLINE_INTERVAL_MS inside LINK_LOST_MS (guarded in live.test.ts)
 /** After a (re)start, wait this long for the first world before the demo plays. */
 export const RESUME_GRACE_MS = 1500;
 

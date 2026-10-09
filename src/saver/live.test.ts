@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Snapshot } from "../shared/types";
+import { LINK_LOST_MS } from "../mainview/world";
+import { ONLINE_INTERVAL_MS } from "../shared/herdr-core";
 import { RESUME_GRACE_MS, STALE_MS, SaverFeed } from "./live";
 
 const snap = (over: Partial<Snapshot> = {}): Snapshot => ({ herdrOnline: true, agents: [], ts: 1, ...over });
@@ -72,5 +74,11 @@ describe("SaverFeed", () => {
 		f.accept(world(snap()), 2000);
 		for (let t = 3000; t <= 2000 + STALE_MS + 1000; t += 1000) f.beat(t);
 		expect(f.mode(2000 + STALE_MS + 1000)).toBe("demo");
+	});
+});
+
+describe("saver timing", () => {
+	test("the demo takes over before the renderer's link-lost banner (never OFFLINE)", () => {
+		expect(STALE_MS + ONLINE_INTERVAL_MS).toBeLessThanOrEqual(LINK_LOST_MS - 1000);
 	});
 });

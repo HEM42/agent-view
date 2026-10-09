@@ -210,6 +210,29 @@ describe("World room mode", () => {
 		expect(board(w)).toEqual(["claude·p-a 4-1"]);
 	});
 
+	test("returning to local mode starts a fresh gap, not the one pending before the room", () => {
+		const w = duelWorld();
+		let now = 0;
+		while (now < GAP_MIN_MS - 3000) {
+			now += DT;
+			w.update(DT, now, EPOCH0 + now);
+		}
+		expect(w.duels.active()).toBeNull(); // local gap pending, nearly due
+		w.reconcile(snap(now, { duel: null, scores: [] }), now);
+		const roomEnd = now + GAP_MAX_MS + 5000;
+		while (now < roomEnd) {
+			now += DT;
+			w.update(DT, now, EPOCH0 + now);
+		}
+		w.reconcile(snap(now), now);
+		const localFrom = now;
+		while (now < localFrom + GAP_MIN_MS - 100) {
+			now += DT;
+			w.update(DT, now, EPOCH0 + now);
+			expect(w.duels.active()).toBeNull();
+		}
+	});
+
 	test("entering local mode clears the board and lets the local director schedule", () => {
 		const w = duelWorld();
 		w.reconcile(snap(0, { duel: duel(EPOCH0), scores: [row] }), 0);

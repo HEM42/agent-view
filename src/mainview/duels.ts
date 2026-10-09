@@ -46,6 +46,9 @@ export interface Duelist extends FsmChar {
 
 export type DuelPhase = "approach" | "ignite" | "clash" | "result" | "retract";
 
+/** A timeline phase while the duel is still running (never "over"). */
+type LivePhase = Omit<DuelPhaseInfo, "phase"> & { phase: DuelPhase };
+
 export interface Duel {
 	a: string; // left mark, faces right
 	b: string; // right mark, faces left
@@ -203,6 +206,7 @@ export class DuelDirector {
 		now: number,
 		epochNow: number,
 	): void {
+		this.nextAt = null; // a local gap from before the room must not outlive it
 		if (this.duel && !this.followed) {
 			// a local duel from before the room appeared
 			this.cancel([chars.get(this.duel.a), chars.get(this.duel.b)], slots, now);
@@ -225,7 +229,7 @@ export class DuelDirector {
 			this.stopFollowing(chars, slots, now); // done: both back to idle
 			return;
 		}
-		this.animate(info, a, b, p, now, epochNow);
+		this.animate(info, a, b, { ...p, phase: p.phase }, now, epochNow);
 	}
 
 	private join(info: DuelInfo, a: Duelist, b: Duelist, slots: SlotManager): void {
@@ -253,7 +257,7 @@ export class DuelDirector {
 		info: DuelInfo,
 		a: Duelist,
 		b: Duelist,
-		p: DuelPhaseInfo,
+		p: LivePhase,
 		now: number,
 		epochNow: number,
 	): void {

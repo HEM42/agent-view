@@ -13,9 +13,10 @@ final class DaemonLink {
 	private static let deadAfter: TimeInterval = 3
 	private static let backoffMin: TimeInterval = 0.5
 	private static let backoffMax: TimeInterval = 5
+	/// One per process, not per kept-alive view.
+	private static let session = URLSession(configuration: .ephemeral)
 
 	private let onMessage: (String) -> Void
-	private let session = URLSession(configuration: .ephemeral)
 	private var task: URLSessionWebSocketTask?
 	/// Bumped on every connect and drop: callbacks from an older socket are ignored.
 	private var generation = 0
@@ -41,6 +42,8 @@ final class DaemonLink {
 	func start() {
 		guard !running else { return }
 		running = true
+		// legacyScreenSaver keeps instances alive across activations, so each start must log its own outcome
+		lastOutcome = ""
 		backoff = Self.backoffMin
 		lastTickAt = Date()
 		let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in self?.tick() }
@@ -63,7 +66,7 @@ final class DaemonLink {
 		guard running else { return }
 		generation += 1
 		let gen = generation
-		let t = session.webSocketTask(with: Self.url)
+		let t = Self.session.webSocketTask(with: Self.url)
 		task = t
 		openedAt = Date()
 		t.resume()

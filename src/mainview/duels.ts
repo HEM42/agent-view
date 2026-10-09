@@ -27,6 +27,12 @@ export interface Duel {
 	retractAt: number | null;
 }
 
+/** A finished duel, for the scoreboard (cancelled duels never report). */
+export interface DuelResult {
+	winner: string;
+	loser: string;
+}
+
 /** A clash the scene should burst into sparks. */
 export interface Spark {
 	x: number;
@@ -114,6 +120,7 @@ export class DuelDirector {
 	private duel: Duel | null = null;
 	private nextAt: number | null = null;
 	private sparks: Spark[] = [];
+	private results: DuelResult[] = [];
 
 	constructor(private rng: () => number = Math.random) {}
 
@@ -130,6 +137,12 @@ export class DuelDirector {
 	drainSparks(): Spark[] {
 		const out = this.sparks;
 		this.sparks = [];
+		return out;
+	}
+
+	drainResults(): DuelResult[] {
+		const out = this.results;
+		this.results = [];
 		return out;
 	}
 
@@ -225,6 +238,7 @@ export class DuelDirector {
 				}
 				const [win, lose] = this.rng() < 0.5 ? [a, b] : [b, a];
 				d.winner = win.id;
+				this.results.push({ winner: win.id, loser: lose.id });
 				win.duelPose = "win";
 				lose.duelPose = "down";
 				// knocked back, away from the centre

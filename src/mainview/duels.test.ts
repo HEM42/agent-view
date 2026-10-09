@@ -359,3 +359,23 @@ describe("duel length", () => {
 		expect([GAP_MIN_MS, GAP_MAX_MS]).toEqual([20_000, 60_000]);
 	});
 });
+
+describe("results for the scoreboard", () => {
+	test("a finished duel reports its winner and loser once", () => {
+		const sim = pair(() => 0);
+		sim.runUntil(() => sim.director.active()?.phase === "result");
+		expect(sim.director.drainResults()).toEqual([{ winner: "a", loser: "b" }]);
+		expect(sim.director.drainResults()).toEqual([]);
+		sim.runUntil(() => sim.director.active() === null);
+		expect(sim.director.drainResults()).toEqual([]);
+	});
+
+	test("a cancelled duel reports nothing", () => {
+		const sim = pair();
+		sim.runUntil(() => sim.director.active()?.phase === "clash");
+		sim.setStatus("b", "working");
+		sim.tick();
+		expect(sim.director.active()).toBeNull();
+		expect(sim.director.drainResults()).toEqual([]);
+	});
+});

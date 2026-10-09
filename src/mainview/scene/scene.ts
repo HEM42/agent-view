@@ -9,6 +9,7 @@ import { accentFor } from "../sprites/palette";
 import { Effects, SIGN_LETTERS } from "./effects";
 import { drawSaber } from "./saber";
 import { renderText } from "../ui/font3x5";
+import { BOARD, BOARD_ROWS, renderScoreboard } from "../ui/scoreboard";
 import { SPARK_MS, deskSpot, droneAlpha, plusPos, swarmPos } from "../characters/drone";
 import {
 	BAR,
@@ -77,6 +78,7 @@ export class Scene {
 		this.drawSign(ctx, world, now);
 		this.drawDoor(ctx, now, world.doorPulseAt);
 		this.drawClock(ctx);
+		this.drawScoreboard(ctx, world);
 
 		// 4. floor entities, y-sorted
 		const entities = [...this.buildEntities(world, now), ...extra];
@@ -223,6 +225,17 @@ export class Scene {
 
 	private clockText = "";
 	private clockDigits: OffscreenCanvas | null = null;
+	private board: OffscreenCanvas | null = null;
+	private boardVersion = -1;
+
+	/** duel standings on the wall; re-rendered only when a result comes in */
+	private drawScoreboard(ctx: Ctx, world: World): void {
+		if (!this.board || this.boardVersion !== world.scoreboard.version) {
+			this.board = renderScoreboard(world.scoreboard.top(BOARD_ROWS));
+			this.boardVersion = world.scoreboard.version;
+		}
+		ctx.drawImage(this.board, BOARD.x, BOARD.y);
+	}
 
 	/** 24h wall clock, top right. Digits re-bake at most once per second. */
 	private drawClock(ctx: Ctx): void {

@@ -124,3 +124,23 @@ describe("World duels", () => {
 		expect(w.chars.get("b")!.duelPose).toBeNull();
 	});
 });
+
+describe("World scoreboard", () => {
+	test("a finished duel lands on the board under agent·project", () => {
+		const w = duelWorld();
+		runUntil(w, 0, () => w.duels.active()?.phase === "result");
+		const top = w.scoreboard.top(5);
+		expect(top.map((s) => `${s.key} ${s.wins}-${s.losses}`)).toEqual(["claude·p-a 1-0", "claude·p-b 0-1"]);
+		expect(top[0]!.accent).toBe("#FF2E88");
+		expect(top[0]!.agentColor).toBe("#E8825A");
+	});
+
+	test("a cancelled duel leaves the board empty", () => {
+		const w = duelWorld();
+		let now = runUntil(w, 0, () => w.duels.active()?.phase === "clash");
+		w.reconcile({ herdrOnline: true, agents: [view("a", "working"), view("b", "idle")], ts: now }, now);
+		now += 1000 / 60;
+		w.update(1000 / 60, now);
+		expect(w.scoreboard.top(5)).toEqual([]);
+	});
+});

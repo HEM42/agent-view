@@ -17,6 +17,7 @@ import {
 import { step } from "./characters/locomotion";
 import { DroneFleet, type Overflow } from "./drones";
 import { DuelDirector } from "./duels";
+import { Scoreboard, type Fighter } from "./scoreboard";
 import { SlotManager } from "./scene/slots";
 import type { Vec2 } from "./scene/layout";
 
@@ -31,6 +32,13 @@ export type DronePick =
 
 const inside = (p: Vec2, b: Box) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
 
+const fighter = (c: Character): Fighter => ({
+	agent: c.agent,
+	project: c.project,
+	agentColor: c.outfitBase,
+	accent: c.accent,
+});
+
 export class World {
 	chars = new Map<string, Character>();
 	slots = new SlotManager();
@@ -40,6 +48,7 @@ export class World {
 	doorPulseAt = 0;
 	readonly fleet = new DroneFleet();
 	readonly duels: DuelDirector;
+	readonly scoreboard = new Scoreboard();
 
 	private spawnQueue: AgentView[] = [];
 	private lastSpawnAt = 0;
@@ -135,6 +144,11 @@ export class World {
 		);
 		// after every char has reacted to its status: a fighter the FSM took back cancels the duel this tick
 		this.duels.update(this.chars, this.slots, now);
+		for (const r of this.duels.drainResults()) {
+			const winner = this.chars.get(r.winner);
+			const loser = this.chars.get(r.loser);
+			if (winner && loser) this.scoreboard.record(fighter(winner), fighter(loser));
+		}
 	}
 
 	private updateChar(c: Character, dtMs: number, now: number): void {

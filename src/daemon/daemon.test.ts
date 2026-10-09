@@ -65,3 +65,18 @@ test("logs herdr going offline once, not every tick", async () => {
 	await Bun.sleep(50);
 	expect(log.filter((l) => l.startsWith("herdr")).length).toBe(1);
 });
+
+test("pushes each agent's subagents to WebSocket clients", async () => {
+	const source = new ScriptedSource();
+	const subagents = [{ id: "a1", type: "Explore", startedAt: 1_800_000_000_000, description: "probe the folder" }];
+	source.agents = [{ ...AGENT, pane_id: "wV:p2", subagents }];
+	const d = startDaemon({ port: 0, source, version: "t", log: () => {} });
+	daemons.push(d);
+
+	const c = new TestSocket(`ws://127.0.0.1:${d.port}/v1/ws`);
+	await c.opened();
+	await waitFor(() => c.messages.some((m) => m.t === "world" && m.snapshot.agents.length === 1));
+	const world = c.messages.find((m) => m.t === "world" && m.snapshot.agents.length === 1);
+	expect(world.snapshot.agents[0].subagents).toEqual(subagents);
+	c.close();
+});

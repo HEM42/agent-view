@@ -76,8 +76,9 @@ bun run uninstall:hook   # removes exactly those entries, the script and its dat
 ```
 
 The hook only runs inside herdr panes (it keys on `HERDR_PANE_ID`), writes to
-`~/Library/Application Support/Agent View/subagents/`, and never blocks Claude. Without it, the room works as before, with no
-drones.
+`~/Library/Application Support/Agent View/subagents/`, and never blocks Claude. The daemon reads those pane directories on
+every herdr poll and sends each agent's subagents with its snapshot, so the drones show in both the app and the screensaver.
+Without the hook, the room works as before, with no drones.
 
 Run `bun run uninstall:hook` before deleting the app or its Application Support folder; otherwise every Claude tool call runs
 a missing hook command.
@@ -147,7 +148,8 @@ For development, `bun run daemon` runs it in the foreground (set `AGENT_VIEW_POR
   `src/shared/herdr-core.ts`), which normalizes and debounces statuses (2 consecutive
   polls to change, except `blocked` which is instant — the raised hand is the
   whole point), and pushes full world snapshots to clients over a WebSocket on
-  `127.0.0.1:47371`.
+  `127.0.0.1:47371`. Each poll also joins Claude agents' running subagents
+  from the hook's pane directories (`src/bun/subagents.ts`).
 - **Bun process** (`src/bun/`) connects to the daemon (`src/bun/daemon-client.ts`)
   and forwards each snapshot to the webview over Electrobun's typed RPC.
 - **Webview** (`src/mainview/`) is a 384x216 canvas scene scaled by integer

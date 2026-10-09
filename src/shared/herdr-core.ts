@@ -51,7 +51,10 @@ export function bySubagentAge(a: Subagent, b: Subagent): number {
 	return a.startedAt - b.startedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
 
-/** Optional `subagents` on a feed entry (the app adds it); anything malformed is dropped. */
+/**
+ * Optional `subagents` on an agent-list entry; anything malformed is dropped.
+ * herdr sends none: the daemon joins them from the hook (src/bun/subagents.ts).
+ */
 export function parseSubagents(v: unknown): Subagent[] {
 	if (!Array.isArray(v)) return [];
 	return v

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
+import { DEFAULT_PORT } from "../daemon/protocol";
 import { daemonUpToDate, ensureDaemon, LABEL, LAUNCH_PATH, managedMode, paths, plistFor, relabelOffline } from "./daemon-setup";
 import type { Snapshot } from "../shared/types";
 
@@ -44,6 +44,10 @@ describe("plistFor", () => {
 		const xml = plistFor(paths("/Users/x"), { port: 50000 });
 		expect(await lint(xml)).toBe(0);
 		expect(xml).toContain("<key>AGENT_VIEW_PORT</key>\n\t\t<string>50000</string>");
+	});
+
+	test("the default port is not written", () => {
+		expect(plistFor(paths("/Users/x"), { port: DEFAULT_PORT })).not.toContain("AGENT_VIEW_PORT");
 	});
 
 	test("home paths are XML-escaped", async () => {

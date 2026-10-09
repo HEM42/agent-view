@@ -42,7 +42,7 @@ const xml = (s: string): string =>
 
 export function plistFor(p: DaemonPaths, opts: { port?: number } = {}): string {
 	const env = [`\t\t<key>PATH</key>\n\t\t<string>${LAUNCH_PATH}</string>`];
-	if (opts.port !== undefined) env.push(`\t\t<key>AGENT_VIEW_PORT</key>\n\t\t<string>${opts.port}</string>`);
+	if (opts.port !== undefined && opts.port !== DEFAULT_PORT) env.push(`\t\t<key>AGENT_VIEW_PORT</key>\n\t\t<string>${opts.port}</string>`);
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">

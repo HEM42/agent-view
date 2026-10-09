@@ -104,6 +104,7 @@ if (daemonState === "starting") {
 		home: homedir(),
 		script: daemonScript,
 		bun: process.execPath,
+		port,
 		healthy: () => healthy(port),
 		log: (m) => console.warn(`[app] ${m}`),
 	}).then((outcome) => {

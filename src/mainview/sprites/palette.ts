@@ -81,6 +81,12 @@ class ColorRegistry {
 		return this.ring[idx % this.ring.length]!;
 	}
 
+	/** The colour already assigned to `name`, or undefined; never claims a slot. */
+	peek(name: string): string | undefined {
+		const idx = this.assigned.get(name);
+		return idx === undefined ? undefined : this.ring[idx % this.ring.length];
+	}
+
 	private load(): void {
 		try {
 			if (typeof localStorage === "undefined") return; // bun-side tools
@@ -136,6 +142,16 @@ export function hashString(s: string): number {
 /** Per-project accent: scarf, nametag, blanket stripe, mug. */
 export function accentFor(project: string): string {
 	return projectColors.color(project);
+}
+
+/** The accent already given to `project`, without claiming a colour for a new one. */
+export function peekAccent(project: string): string | undefined {
+	return projectColors.peek(project);
+}
+
+/** The outfit colour already given to `agent`, without claiming a colour for a new one. */
+export function peekAgentColor(agent: string): string | undefined {
+	return agentColors.peek(agent);
 }
 
 export function skinFor(terminalId: string): string {

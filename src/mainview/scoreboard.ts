@@ -1,5 +1,8 @@
 import type { ScoreRow } from "../shared/types";
-import { accentFor, outfitFor } from "./sprites/palette";
+import { PAL, peekAccent, peekAgentColor } from "./sprites/palette";
+
+/** Rows for agents and projects not on screen: they must not claim a palette slot. */
+const NEUTRAL: string = PAL.lilac;
 
 /** A duelist as the scoreboard knows them: identity plus nametag colours. */
 export interface Fighter {
@@ -26,23 +29,27 @@ export class Scoreboard {
 	private rows = new Map<string, Standing>();
 	/** what replace() last set, to skip no-op redraws; null after a local record */
 	private replaced: string | null = "[]";
+	private lastRows: readonly ScoreRow[] | null = null;
 
 	record(winner: Fighter, loser: Fighter): void {
 		this.row(winner).wins++;
 		this.row(loser).losses++;
 		this.replaced = null;
+		this.lastRows = null;
 		this.version++;
 	}
 
 	/** Room mode: the daemon's standings, coloured like the nametags. */
 	replace(rows: readonly ScoreRow[]): void {
+		if (rows === this.lastRows) return; // the same snapshot again
+		this.lastRows = rows;
 		const next = rows
 			.map((r) => ({
 				key: r.key,
 				agent: r.agent,
 				project: r.project,
-				agentColor: outfitFor(r.agent).base,
-				accent: accentFor(r.project),
+				agentColor: peekAgentColor(r.agent) ?? NEUTRAL,
+				accent: peekAccent(r.project) ?? NEUTRAL,
 				wins: r.wins,
 				losses: r.losses,
 			}))

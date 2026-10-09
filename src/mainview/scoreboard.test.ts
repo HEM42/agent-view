@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ScoreRow } from "../shared/types";
 import { Scoreboard, type Fighter } from "./scoreboard";
-import { accentFor, outfitFor } from "./sprites/palette";
+import { PAL, accentFor, outfitFor, peekAccent } from "./sprites/palette";
 
 const f = (agent: string, project: string, accent = "#2DE2E6"): Fighter => ({
 	agent,
@@ -81,6 +81,7 @@ describe("Scoreboard.replace (the daemon's standings)", () => {
 	test("takes the rows as they are, coloured like the nametags", () => {
 		const b = new Scoreboard();
 		b.record(f("pi", "stale"), f("pi", "gone"));
+		accentFor("nexel"); // on screen, so it has a colour
 		b.replace([row("pi", "nordlink", 1, 2), row("claude", "nexel", 3, 0)]);
 		expect(rows(b)).toEqual(["claude·nexel 3-0", "pi·nordlink 1-2"]);
 		const top = b.top(1)[0]!;
@@ -103,6 +104,26 @@ describe("Scoreboard.replace (the daemon's standings)", () => {
 		const v3 = b.version;
 		b.replace([]);
 		expect(b.version).toBe(v3);
+	});
+
+	test("rows for unseen projects get the neutral colour and claim no palette slot", () => {
+		const b = new Scoreboard();
+		b.replace([row("claude", "never-seen-project", 1, 0)]);
+		expect(b.top(1)[0]!.accent).toBe(PAL.lilac);
+		expect(peekAccent("never-seen-project")).toBeUndefined();
+	});
+
+	test("the same rows array again does no work", () => {
+		const b = new Scoreboard();
+		const same = [row("pi", "x", 0, 1)];
+		b.replace(same);
+		const v = b.version;
+		same[0]!.wins = 9; // a same-reference array is taken as unchanged
+		b.replace(same);
+		expect(b.version).toBe(v);
+		expect(rows(b)).toEqual(["pi·x 0-1"]);
+		b.replace([row("pi", "x", 9, 1)]); // a new array is compared by content
+		expect(b.version).not.toBe(v);
 	});
 
 	test("an empty board replaced by nothing stays put", () => {

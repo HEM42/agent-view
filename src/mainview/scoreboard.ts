@@ -1,3 +1,6 @@
+import type { ScoreRow } from "../shared/types";
+import { accentFor, outfitFor } from "./sprites/palette";
+
 /** A duelist as the scoreboard knows them: identity plus nametag colours. */
 export interface Fighter {
 	agent: string;
@@ -13,17 +16,41 @@ export interface Standing extends Fighter {
 }
 
 /**
- * Lightsaber duel wins and losses per agent·project. In memory only: the
- * board starts empty with every app launch. Pure bookkeeping, so the wall
+ * Lightsaber duel wins and losses per agent·project. Local mode records
+ * results in memory (the board starts empty with every launch); room mode
+ * replaces it with the daemon's standings. Pure bookkeeping, so the wall
  * sign just redraws when `version` moves.
  */
 export class Scoreboard {
 	version = 0;
 	private rows = new Map<string, Standing>();
+	/** what replace() last set, to skip no-op redraws; null after a local record */
+	private replaced: string | null = "[]";
 
 	record(winner: Fighter, loser: Fighter): void {
 		this.row(winner).wins++;
 		this.row(loser).losses++;
+		this.replaced = null;
+		this.version++;
+	}
+
+	/** Room mode: the daemon's standings, coloured like the nametags. */
+	replace(rows: readonly ScoreRow[]): void {
+		const next = rows
+			.map((r) => ({
+				key: r.key,
+				agent: r.agent,
+				project: r.project,
+				agentColor: outfitFor(r.agent).base,
+				accent: accentFor(r.project),
+				wins: r.wins,
+				losses: r.losses,
+			}))
+			.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+		const sig = JSON.stringify(next);
+		if (sig === this.replaced) return;
+		this.replaced = sig;
+		this.rows = new Map(next.map((s) => [s.key, s]));
 		this.version++;
 	}
 

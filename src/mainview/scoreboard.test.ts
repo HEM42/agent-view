@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import type { ScoreRow } from "../shared/types";
 import { Scoreboard, type Fighter } from "./scoreboard";
+import { accentFor, outfitFor } from "./sprites/palette";
 
 const f = (agent: string, project: string, accent = "#2DE2E6"): Fighter => ({
 	agent,
@@ -64,5 +66,49 @@ describe("Scoreboard", () => {
 		const v0 = b.version;
 		b.record(f("claude", "a"), f("pi", "b"));
 		expect(b.version).not.toBe(v0);
+	});
+});
+
+describe("Scoreboard.replace (the daemon's standings)", () => {
+	const row = (agent: string, project: string, wins: number, losses: number): ScoreRow => ({
+		key: `${agent}·${project}`,
+		agent,
+		project,
+		wins,
+		losses,
+	});
+
+	test("takes the rows as they are, coloured like the nametags", () => {
+		const b = new Scoreboard();
+		b.record(f("pi", "stale"), f("pi", "gone"));
+		b.replace([row("pi", "nordlink", 1, 2), row("claude", "nexel", 3, 0)]);
+		expect(rows(b)).toEqual(["claude·nexel 3-0", "pi·nordlink 1-2"]);
+		const top = b.top(1)[0]!;
+		expect(top.agentColor).toBe(outfitFor("claude").base);
+		expect(top.accent).toBe(accentFor("nexel"));
+	});
+
+	test("version moves only when the standings change", () => {
+		const b = new Scoreboard();
+		b.replace([row("claude", "nexel", 1, 0), row("pi", "x", 0, 1)]);
+		const v1 = b.version;
+		b.replace([row("pi", "x", 0, 1), row("claude", "nexel", 1, 0)]); // same, other order
+		expect(b.version).toBe(v1);
+		b.replace([row("claude", "nexel", 2, 0), row("pi", "x", 0, 2)]);
+		expect(b.version).not.toBe(v1);
+		const v2 = b.version;
+		b.replace([]);
+		expect(b.version).not.toBe(v2);
+		expect(b.top(5)).toEqual([]);
+		const v3 = b.version;
+		b.replace([]);
+		expect(b.version).toBe(v3);
+	});
+
+	test("an empty board replaced by nothing stays put", () => {
+		const b = new Scoreboard();
+		const v0 = b.version;
+		b.replace([]);
+		expect(b.version).toBe(v0);
 	});
 });

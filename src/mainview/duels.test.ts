@@ -24,8 +24,10 @@ import {
 import { LANES } from "./scene/layout";
 import { SlotManager } from "./scene/slots";
 import { DUEL_GRIP } from "./sprites/sheets/character";
+import { CLASH_MS, IGNITE_MS, APPROACH_MS, MARK_HALF, duelTimes, type DuelInfo } from "../shared/duel-timeline";
 
 const TICK = 1000 / 60;
+const EPOCH0 = 1_760_000_000_000;
 
 const mk = (id: string, over: Partial<Duelist> = {}): Duelist => ({
 	id,
@@ -50,6 +52,8 @@ class Sim {
 	retryAt = new Map<string, number>();
 	poses = new Map<string, DuelPose[]>();
 	now = 0;
+	/** room mode: the daemon's duel (null = none); undefined = local mode */
+	room: DuelInfo | null | undefined = undefined;
 	constructor(
 		public director: DuelDirector,
 		cs: Duelist[],
@@ -79,12 +83,17 @@ class Sim {
 				applyStatus(c, c.desiredStatus, this.slots, this.now);
 			}
 		}
-		this.director.update(this.chars, this.slots, this.now);
+		if (this.room === undefined) this.director.update(this.chars, this.slots, this.now);
+		else this.director.follow(this.room, this.chars, this.slots, this.now, this.epoch());
 		for (const c of this.chars.values()) {
 			const seen = this.poses.get(c.id) ?? [];
 			if (c.duelPose && seen[seen.length - 1] !== c.duelPose) seen.push(c.duelPose);
 			this.poses.set(c.id, seen);
 		}
+	}
+	/** the shared epoch clock, a fixed offset from perf time */
+	epoch(): number {
+		return EPOCH0 + this.now;
 	}
 	runFor(ms: number): void {
 		const end = this.now + ms;
@@ -377,5 +386,179 @@ describe("results for the scoreboard", () => {
 		sim.tick();
 		expect(sim.director.active()).toBeNull();
 		expect(sim.director.drainResults()).toEqual([]);
+	});
+});
+
+describe("following the daemon's duel", () => {
+	/** a and b near the arena; the daemon's duel starts now unless told otherwise */
+	const room = (over: Partial<DuelInfo> = {}) => {
+		const sim = pair(() => 0);
+		const info: DuelInfo = { id: "d1", a: "a", b: "b", centerX: 150, clashes: 5, winner: "a", startAt: sim.epoch(), ...over };
+		sim.room = info;
+		return { sim, info, times: duelTimes(info) };
+	};
+	const untilEpoch = (sim: Sim, at: number) => sim.runUntil(() => sim.epoch() >= at);
+	const marks = (sim: Sim) => [sim.chars.get("a")!.pos, sim.chars.get("b")!.pos];
+	const onMarks = (sim: Sim, centerX = 150) => {
+		const [a, b] = [sim.chars.get("a")!, sim.chars.get("b")!];
+		expect([a.state, b.state]).toEqual(["DUELING", "DUELING"]);
+		expect([a.path.length, b.path.length]).toEqual([0, 0]);
+		expect(marks(sim)).toEqual([
+			{ x: centerX - MARK_HALF, y: LANES[2] },
+			{ x: centerX + MARK_HALF, y: LANES[2] },
+		]);
+		expect([a.facing, b.facing]).toEqual([1, -1]);
+	};
+
+	test("a new duel walks both fighters to their marks", () => {
+		const { sim } = room();
+		sim.tick();
+		const d = sim.director.active()!;
+		expect([d.a, d.b, d.centerX, d.phase]).toEqual(["a", "b", 150, "approach"]);
+		for (const c of sim.chars.values()) {
+			expect(c.state).toBe("WALKING");
+			expect(c.pending?.state).toBe("DUELING");
+		}
+	});
+
+	test("an early arrival stands in guard, blade off, until ignite", () => {
+		const { sim, times } = room();
+		sim.runFor(1000); // a (10 px away) is there, b (100 px) still walking
+		const [a, b] = [sim.chars.get("a")!, sim.chars.get("b")!];
+		expect([a.state, a.duelPose, a.facing]).toEqual(["DUELING", "guard", 1]);
+		expect(b.state).toBe("WALKING");
+		untilEpoch(sim, times.igniteAt - 100);
+		expect(sim.director.active()!.phase).toBe("approach");
+		expect(sim.director.bladeLen("a", sim.now)).toBe(0);
+		untilEpoch(sim, times.igniteAt + BLADE_RAMP_MS + 100);
+		expect(sim.director.active()!.phase).toBe("ignite");
+		expect(sim.director.bladeLen("a", sim.now)).toBe(BLADE_LEN);
+	});
+
+	test("a fighter who hasn't arrived by ignite is placed on its mark", () => {
+		const { sim, info, times } = room();
+		sim.tick(); // walks start
+		sim.now = times.igniteAt - EPOCH0 + 50; // the window was hidden: no ticks through the approach
+		sim.director.follow(info, sim.chars, sim.slots, sim.now, sim.epoch());
+		onMarks(sim);
+		expect(sim.director.active()!.phase).toBe("ignite");
+		expect(sim.chars.get("a")!.duelPose).toBe("guard");
+		expect(sim.chars.get("b")!.duelPose).toBe("guard");
+		expect(sim.slots.all().filter((s) => s.occupiedBy !== null)).toEqual([]);
+	});
+
+	test("joining mid-duel places both on their marks at the current phase", () => {
+		const startAt = EPOCH0 - (APPROACH_MS + IGNITE_MS + 2 * CLASH_MS + 100); // third clash, a attacks
+		const { sim } = room({ startAt, centerX: 200 });
+		sim.tick();
+		onMarks(sim, 200);
+		const d = sim.director.active()!;
+		expect(d.phase).toBe("clash");
+		expect([sim.chars.get("a")!.duelPose, sim.chars.get("b")!.duelPose]).toEqual(["swing", "guard"]);
+		expect(sim.director.bladeLen("a", sim.now)).toBe(BLADE_LEN);
+		sim.runFor(CLASH_MS);
+		expect([sim.chars.get("a")!.duelPose, sim.chars.get("b")!.duelPose]).toEqual(["guard", "swing"]);
+	});
+
+	test("one spark per strike, poses and knockback from d.winner, no local result", () => {
+		const { sim, times } = room({ winner: "b", clashes: 7 });
+		let sparks = 0;
+		sim.runUntil(() => {
+			sparks += sim.director.drainSparks().length;
+			return sim.epoch() >= times.resultAt + 100;
+		});
+		expect(sparks).toBe(7);
+		const [a, b] = [sim.chars.get("a")!, sim.chars.get("b")!];
+		expect(sim.director.active()!.phase).toBe("result");
+		expect(sim.director.active()!.winner).toBe("b");
+		expect([a.duelPose, b.duelPose]).toEqual(["down", "win"]);
+		expect(a.pos.x).toBe(140 - KNOCKBACK);
+		expect(b.pos.x).toBe(160);
+		expect(sim.director.drainResults()).toEqual([]);
+		untilEpoch(sim, times.retractAt + 50);
+		expect(sim.director.active()!.phase).toBe("retract");
+		expect(a.pos.x).toBe(140 - KNOCKBACK); // knocked back once
+		expect(sim.director.bladeLen("b", sim.now)).toBeLessThan(BLADE_LEN);
+	});
+
+	test("at endAt both go back to idle, and the lingering duel is not rejoined", () => {
+		const { sim, times } = room();
+		untilEpoch(sim, times.endAt);
+		sim.tick();
+		expect(sim.director.active()).toBeNull();
+		for (const c of sim.chars.values()) {
+			expect(c.duelPose).toBeNull();
+			expect(c.state).toBe("WALKING");
+			expect(c.pending?.state).not.toBe("DUELING");
+		}
+		sim.runFor(1000); // the daemon still sends it until its next tick
+		expect(sim.director.active()).toBeNull();
+		sim.room = null;
+		sim.tick();
+		expect(sim.director.active()).toBeNull();
+	});
+
+	test("the duel vanishing before the result cancels: idle, no result pose", () => {
+		const { sim, times } = room();
+		untilEpoch(sim, times.clashAt(1));
+		sim.room = null;
+		sim.tick();
+		expect(sim.director.active()).toBeNull();
+		for (const c of sim.chars.values()) {
+			expect(c.duelPose).toBeNull();
+			expect(c.pending?.state).not.toBe("DUELING");
+		}
+		expect(sim.poses.get("a")).not.toContain("win");
+		expect(sim.poses.get("b")).not.toContain("down");
+		expect(sim.director.bladeLen("a", sim.now)).toBe(0);
+	});
+
+	test("a new duel id replaces the old one", () => {
+		const { sim, info, times } = room();
+		untilEpoch(sim, times.clashAt(0));
+		sim.room = { ...info, id: "d2", startAt: sim.epoch(), centerX: 220 };
+		sim.tick();
+		expect(sim.director.active()!.phase).toBe("approach");
+		for (const c of sim.chars.values()) expect(c.duelPose).toBeNull();
+	});
+
+	test("a missing fighter: wait, then join mid-duel once it exists", () => {
+		const { sim, times } = room();
+		const b = sim.chars.get("b")!;
+		sim.chars.delete("b");
+		sim.runFor(1000);
+		expect(sim.director.active()).toBeNull();
+		expect(sim.chars.get("a")!.state).toBe("IDLE_STANDING");
+		untilEpoch(sim, times.clashAt(1) + 10);
+		sim.chars.set("b", b);
+		sim.tick();
+		onMarks(sim);
+		expect(sim.director.active()!.phase).toBe("clash");
+	});
+
+	test("a local status change pulls the fighter out, and the partner goes back to idle", () => {
+		const { sim, times } = room();
+		untilEpoch(sim, times.clashAt(0));
+		sim.setStatus("a", "working");
+		sim.tick();
+		expect(sim.director.active()).toBeNull();
+		expect(sim.chars.get("a")!.pending?.state).toBe("WORKING");
+		expect(sim.chars.get("b")!.pending?.state).not.toBe("DUELING");
+		sim.runFor(1000); // the daemon hasn't cancelled yet: don't drag them back
+		expect(sim.director.active()).toBeNull();
+		expect(sim.chars.get("b")!.pending?.state).not.toBe("DUELING");
+	});
+
+	test("following cancels a local duel, and going local again cancels the followed one", () => {
+		const sim = pair(() => 0);
+		sim.runUntil(() => sim.director.active()?.phase === "clash");
+		sim.room = { id: "d1", a: "b", b: "a", centerX: 220, clashes: 5, winner: "a", startAt: sim.epoch() };
+		sim.tick();
+		expect(sim.director.active()).toMatchObject({ a: "b", b: "a", centerX: 220, phase: "approach" });
+		expect(sim.director.drainResults()).toEqual([]);
+		sim.room = undefined;
+		sim.tick();
+		expect(sim.director.active()).toBeNull();
+		for (const c of sim.chars.values()) expect(c.pending?.state).not.toBe("DUELING");
 	});
 });

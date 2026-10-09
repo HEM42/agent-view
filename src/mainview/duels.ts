@@ -1,4 +1,4 @@
-import { returnToIdle, startDuelWalk, type CharState, type FsmChar } from "./characters/fsm";
+import { arrive, returnToIdle, startDuelWalk, type CharState, type FsmChar } from "./characters/fsm";
 import { LANES, type Vec2 } from "./scene/layout";
 import type { SlotManager } from "./scene/slots";
 import {
@@ -14,6 +14,10 @@ import {
 	RESULT_MS,
 	RETRACT_MS,
 	STRIKE_MS,
+	duelPhaseAt,
+	duelTimes,
+	type DuelInfo,
+	type DuelPhaseInfo,
 } from "../shared/duel-timeline";
 import { CHARACTER, DUEL_GRIP, type Grip } from "./sprites/sheets/character";
 
@@ -138,6 +142,11 @@ export class DuelDirector {
 	private nextAt: number | null = null;
 	private sparks: Spark[] = [];
 	private results: DuelResult[] = [];
+	/** room mode: the daemon's duel being animated */
+	private followed: DuelInfo | null = null;
+	/** room mode: a duel finished or abandoned here, never rejoined while the daemon still sends it */
+	private doneId: string | null = null;
+	private sparkedClash = -1;
 
 	constructor(private rng: () => number = Math.random) {}
 
@@ -163,7 +172,9 @@ export class DuelDirector {
 		return out;
 	}
 
+	/** Local mode: schedule and referee duels here. */
 	update(chars: ReadonlyMap<string, Duelist>, slots: SlotManager, now: number): void {
+		if (this.followed) this.stopFollowing(chars, slots, now); // back from room mode
 		if (this.duel) {
 			this.advance(this.duel, chars, slots, now);
 			return;
@@ -178,6 +189,127 @@ export class DuelDirector {
 			return;
 		}
 		if (now >= this.nextAt) this.start(eligible, slots, now);
+	}
+
+	/**
+	 * Room mode: animate the daemon's duel instead of scheduling one. `now` is
+	 * perf time for the animation, `epochNow` the shared clock the timeline is
+	 * written in. The daemon keeps the score, so no results are reported here.
+	 */
+	follow(
+		info: DuelInfo | null,
+		chars: ReadonlyMap<string, Duelist>,
+		slots: SlotManager,
+		now: number,
+		epochNow: number,
+	): void {
+		if (this.duel && !this.followed) {
+			// a local duel from before the room appeared
+			this.cancel([chars.get(this.duel.a), chars.get(this.duel.b)], slots, now);
+		}
+		if (this.followed && this.followed.id !== info?.id) this.stopFollowing(chars, slots, now);
+		if (!info || info.id === this.doneId) return;
+		const a = chars.get(info.a);
+		const b = chars.get(info.b);
+		const p = duelPhaseAt(info, epochNow);
+		if (!this.followed) {
+			if (p.phase === "over") return;
+			if (!canJoin(a) || !canJoin(b)) return; // not spawned yet (or busy here): wait
+			this.join(info, a, b, slots);
+		} else if (!inDuel(a) || !inDuel(b)) {
+			// a local status change took a fighter; the daemon cancels too
+			this.stopFollowing(chars, slots, now);
+			return;
+		}
+		if (p.phase === "over") {
+			this.stopFollowing(chars, slots, now); // done: both back to idle
+			return;
+		}
+		this.animate(info, a, b, p, now, epochNow);
+	}
+
+	private join(info: DuelInfo, a: Duelist, b: Duelist, slots: SlotManager): void {
+		this.followed = info;
+		this.sparkedClash = -1;
+		startDuelWalk(a, slots, markA(info));
+		startDuelWalk(b, slots, markB(info));
+		this.duel = {
+			a: info.a,
+			b: info.b,
+			centerX: info.centerX,
+			phase: "approach",
+			phaseUntil: 0,
+			clashesLeft: info.clashes,
+			attacker: info.a,
+			strikeAt: null,
+			winner: null,
+			igniteAt: null,
+			retractAt: null,
+		};
+	}
+
+	/** Pose both fighters for the timeline's current phase; idempotent per tick. */
+	private animate(
+		info: DuelInfo,
+		a: Duelist,
+		b: Duelist,
+		p: DuelPhaseInfo,
+		now: number,
+		epochNow: number,
+	): void {
+		const d = this.duel!;
+		const t = duelTimes(info);
+		const perf = (epochAt: number) => now + (epochAt - epochNow);
+		d.phase = p.phase;
+		d.phaseUntil = perf(t.endAt);
+		if (p.phase === "approach") {
+			// whoever arrives first waits in guard, blade off
+			if (a.state === "DUELING" && a.path.length === 0) this.takeGuard(a, 1);
+			if (b.state === "DUELING" && b.path.length === 0) this.takeGuard(b, -1);
+			return;
+		}
+		// from ignite on both stand on their marks, even if the window missed the walk
+		placeOnMark(a, markA(info));
+		placeOnMark(b, markB(info));
+		this.takeGuard(a, 1);
+		this.takeGuard(b, -1);
+		d.igniteAt = perf(t.igniteAt);
+		d.retractAt = p.phase === "retract" ? perf(t.retractAt) : null;
+		d.strikeAt = null;
+		if (p.phase === "ignite") return;
+		if (p.phase === "clash") {
+			d.clashesLeft = info.clashes - p.clashIndex;
+			d.attacker = p.attacker!;
+			const [att, def] = d.attacker === a.id ? [a, b] : [b, a];
+			att.duelPose = "swing";
+			if (epochNow < p.strikeAt!) {
+				d.strikeAt = perf(p.strikeAt!);
+			} else if (p.clashIndex > this.sparkedClash) {
+				this.sparkedClash = p.clashIndex;
+				this.spark(att, def, a, b);
+			}
+			return;
+		}
+		// result and retract: the daemon picked the winner; the loser is knocked back
+		d.clashesLeft = 0;
+		d.winner = info.winner;
+		const [win, lose] = info.winner === b.id ? [b, a] : [a, b];
+		win.duelPose = "win";
+		lose.duelPose = "down";
+		lose.pos = { x: lose.pos.x + (lose === a ? -KNOCKBACK : KNOCKBACK), y: lose.pos.y };
+	}
+
+	/** Drop the followed duel: whoever is still ours walks back to idle, with no result pose. */
+	private stopFollowing(chars: ReadonlyMap<string, Duelist>, slots: SlotManager, now: number): void {
+		const f = this.followed!;
+		this.doneId = f.id;
+		this.cancel([chars.get(f.a), chars.get(f.b)], slots, now);
+	}
+
+	private spark(att: Duelist, def: Duelist, a: Duelist, b: Duelist): void {
+		if (this.sparks.length < MAX_PENDING_SPARKS) {
+			this.sparks.push({ ...clashPoint(att, def), colors: [a.accent, b.accent, SPARK_WHITE] });
+		}
 	}
 
 	private gap(): number {
@@ -242,9 +374,7 @@ export class DuelDirector {
 				if (d.strikeAt !== null && now >= d.strikeAt) {
 					d.strikeAt = null;
 					const [att, def] = d.attacker === a.id ? [a, b] : [b, a];
-					if (this.sparks.length < MAX_PENDING_SPARKS) {
-						this.sparks.push({ ...clashPoint(att, def), colors: [a.accent, b.accent, SPARK_WHITE] });
-					}
+					this.spark(att, def, a, b);
 				}
 				if (now < d.phaseUntil) return;
 				d.clashesLeft--;
@@ -311,5 +441,23 @@ export class DuelDirector {
 	private end(): void {
 		this.duel = null;
 		this.nextAt = null;
+		this.followed = null;
 	}
+}
+
+const markA = (d: DuelInfo): Vec2 => ({ x: d.centerX - MARK_HALF, y: LANES[2]! });
+const markB = (d: DuelInfo): Vec2 => ({ x: d.centerX + MARK_HALF, y: LANES[2]! });
+
+/** Room mode: the daemon saw them idle; here they must at least be in the room and not busy. */
+function canJoin(c: Duelist | undefined): c is Duelist {
+	return !!c && !c.gone && c.desiredStatus === "idle" && c.state !== "LEAVING";
+}
+
+/** Late for ignite (window hidden, or joining mid-duel): stop walking and stand on the mark. */
+function placeOnMark(c: Duelist, mark: Vec2): void {
+	if (c.path.length > 0) {
+		c.path = [];
+		arrive(c); // pending is the duel: state becomes DUELING
+	}
+	c.pos = { ...mark };
 }

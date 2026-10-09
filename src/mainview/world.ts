@@ -1,4 +1,4 @@
-import type { AgentView, Snapshot, Subagent } from "../shared/types";
+import type { AgentView, RoomState, Snapshot, Subagent } from "../shared/types";
 import {
 	animFor,
 	createCharacter,
@@ -55,6 +55,9 @@ export class World {
 	private lastMessageAt = 0;
 	private latest = new Map<string, AgentView>();
 	private subagents = new Map<string, Subagent[]>();
+	/** the daemon's duel and scores; null = local mode (no daemon room: demo, older daemon) */
+	private room: RoomState | null = null;
+	private followingRoom = false;
 
 	constructor(rng: () => number = Math.random) {
 		this.duels = new DuelDirector(rng);
@@ -63,6 +66,7 @@ export class World {
 	reconcile(snap: Snapshot, now: number): void {
 		this.lastMessageAt = now;
 		this.herdrOnline = snap.herdrOnline;
+		this.room = snap.room ?? null;
 		this.offlineReason = snap.herdrOnline
 			? null
 			: (snap.offlineReason ?? "server-down");
@@ -112,7 +116,8 @@ export class World {
 		this.lastMessageAt = 0;
 	}
 
-	update(dtMs: number, now: number): void {
+	/** `now` is perf time; `epochNow` the clock the daemon's duel timeline is written in. */
+	update(dtMs: number, now: number, epochNow: number = Date.now()): void {
 		// staggered walk-ins: agents file in through the door one by one
 		if (this.spawnQueue.length > 0 && now - this.lastSpawnAt >= SPAWN_STAGGER_MS) {
 			const view = this.spawnQueue.shift()!;
@@ -143,6 +148,24 @@ export class World {
 			Date.now(),
 		);
 		// after every char has reacted to its status: a fighter the FSM took back cancels the duel this tick
+		this.updateDuels(now, epochNow);
+	}
+
+	/**
+	 * Room mode follows the daemon's duel and shows its scores; local mode
+	 * schedules duels here. Each director call cancels the other mode's duel.
+	 */
+	private updateDuels(now: number, epochNow: number): void {
+		if (this.room) {
+			this.followingRoom = true;
+			this.duels.follow(this.room.duel, this.chars, this.slots, now, epochNow);
+			this.scoreboard.replace(this.room.scores);
+			return;
+		}
+		if (this.followingRoom) {
+			this.followingRoom = false;
+			this.scoreboard.replace([]); // local scores start over
+		}
 		this.duels.update(this.chars, this.slots, now);
 		for (const r of this.duels.drainResults()) {
 			const winner = this.chars.get(r.winner);

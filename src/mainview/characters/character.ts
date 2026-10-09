@@ -5,13 +5,14 @@ import { accentFor, outfitFor, skinFor } from "../sprites/palette";
 import { CHARACTER, SLEEP } from "../sprites/sheets/character";
 import { DOOR } from "../scene/layout";
 import { makeNametag } from "../ui/nametag";
-import type { CharState, FsmChar } from "./fsm";
+import type { CharState } from "./fsm";
+import type { DuelPose, Duelist } from "../duels";
 import type { Slot } from "../scene/slots";
 import type { Vec2 } from "../scene/layout";
 
 export type BubbleKind = "bang" | "question" | "zzz" | null;
 
-export interface Character extends FsmChar {
+export interface Character extends Duelist {
 	agent: string;
 	project: string;
 	label: string;
@@ -84,6 +85,7 @@ export function createCharacter(view: AgentView, now: number): Character {
 		),
 		walkJitter: hashJitter(view.id),
 		retryAt: 0,
+		duelPose: null,
 	};
 }
 
@@ -116,7 +118,15 @@ const STATE_ANIM: Record<CharState, AnimName> = {
 	LEAVING: "walk",
 };
 
+const DUEL_ANIM: Record<DuelPose, AnimName> = {
+	guard: "duelGuard",
+	swing: "duelSwing",
+	down: "duelDown",
+	win: "duelWin",
+};
+
 export function animFor(c: Character): AnimName {
+	if (c.state === "DUELING" && c.duelPose) return DUEL_ANIM[c.duelPose];
 	return STATE_ANIM[c.state];
 }
 

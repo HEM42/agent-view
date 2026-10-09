@@ -112,6 +112,7 @@ const STATE_ANIM: Record<CharState, AnimName> = {
 	SLEEPING: "sleep",
 	IDLE_STANDING: "idle",
 	CONFUSED: "confused",
+	DUELING: "duelGuard",
 	LEAVING: "walk",
 };
 
@@ -147,7 +148,8 @@ export function stateMatchesStatus(
 				state === "WATCHING_TV" ||
 				state === "AT_BAR" ||
 				state === "SLEEPING" ||
-				state === "IDLE_STANDING"
+				state === "IDLE_STANDING" ||
+				state === "DUELING"
 			);
 		case "unknown":
 			return state === "CONFUSED";

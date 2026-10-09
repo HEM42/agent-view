@@ -1,6 +1,6 @@
 import type { AgentStatus } from "../../shared/types";
 import type { Slot, SlotManager } from "../scene/slots";
-import { DOOR, type Vec2 } from "../scene/layout";
+import { DOOR, nearestLane, type Vec2 } from "../scene/layout";
 import { buildPath } from "./locomotion";
 
 export type CharState =
@@ -13,6 +13,7 @@ export type CharState =
 	| "SLEEPING"
 	| "IDLE_STANDING"
 	| "CONFUSED"
+	| "DUELING"
 	| "LEAVING";
 
 /** What the character is mid-walk towards. */
@@ -155,20 +156,13 @@ export function applyStatus(
 				c.state === "WATCHING_TV" ||
 				c.state === "AT_BAR" ||
 				c.state === "SLEEPING" ||
-				c.state === "IDLE_STANDING"
+				c.state === "IDLE_STANDING" ||
+				c.state === "DUELING"
 			) {
 				return; // long-idle promotion handled in updateLongIdle
 			}
 			slots.releaseSeat(c.id); // stand up; desk ownership stays
-			const spot =
-				now - c.idleSince >= IDLE_LONG_MS
-					? (slots.claimNearest("bed", c.id, c.pos) ??
-						slots.claimIdleSpot(c.id, c.pos))
-					: slots.claimIdleSpot(c.id, c.pos);
-			walkTo(c, spot.standPos, spot.lane, {
-				state: stateForIdleSlot(spot),
-				slot: spot,
-			});
+			walkToIdleSpot(c, slots, now);
 			return;
 		}
 		case "unknown": {
@@ -194,6 +188,39 @@ export function stateForIdleSlot(slot: Slot): CharState {
 		default:
 			return "IDLE_STANDING";
 	}
+}
+
+/** Couch → bar → loiter, or the bunk once idle long enough. */
+function walkToIdleSpot(c: FsmChar, slots: SlotManager, now: number): void {
+	const spot =
+		now - c.idleSince >= IDLE_LONG_MS
+			? (slots.claimNearest("bed", c.id, c.pos) ??
+				slots.claimIdleSpot(c.id, c.pos))
+			: slots.claimIdleSpot(c.id, c.pos);
+	walkTo(c, spot.standPos, spot.lane, {
+		state: stateForIdleSlot(spot),
+		slot: spot,
+	});
+}
+
+/**
+ * Leave the current spot for a duel mark. walkTo reads the old seat for its
+ * exit waypoints, so the seat is released only afterwards; desk ownership
+ * survives so subagent drones keep hovering.
+ */
+export function startDuelWalk(c: FsmChar, slots: SlotManager, mark: Vec2): void {
+	walkTo(c, mark, nearestLane(mark.y), { state: "DUELING", slot: null });
+	slots.releaseSeat(c.id);
+	c.slot = null;
+}
+
+/** After (or instead of) a duel: from wherever we stand, back to an idle spot. */
+export function returnToIdle(c: FsmChar, slots: SlotManager, now: number): void {
+	c.state = "IDLE_STANDING";
+	c.slot = null;
+	c.pending = null;
+	c.path = [];
+	walkToIdleSpot(c, slots, now);
 }
 
 /** Promote a long-idler from couch/loiter to a bed when one is free. */

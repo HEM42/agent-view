@@ -17,7 +17,7 @@ swiftc -swift-version 5 -O \
 	-module-name AgentViewSaver \
 	-emit-library \
 	-framework ScreenSaver -framework WebKit -framework AppKit \
-	saver/AgentViewSaverView.swift saver/HerdrBridge.swift \
+	saver/AgentViewSaverView.swift saver/DaemonLink.swift \
 	-o "$OUT/Contents/MacOS/AgentViewSaver"
 
 codesign --force --sign - "$OUT"

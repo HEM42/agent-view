@@ -10,6 +10,7 @@ final class AgentViewSaverView: ScreenSaverView, WKNavigationDelegate {
 	/// True while the saver is stopped: a page that (re)loads while paused
 	/// must not start animating before the next startAnimation().
 	private var paused = true
+	private var link: DaemonLink?
 
 	override init?(frame: NSRect, isPreview: Bool) {
 		super.init(frame: frame, isPreview: isPreview)
@@ -23,6 +24,7 @@ final class AgentViewSaverView: ScreenSaverView, WKNavigationDelegate {
 
 	deinit {
 		if let stopObserver { DistributedNotificationCenter.default().removeObserver(stopObserver) }
+		link?.stop()
 	}
 
 	private func setUp(preview: Bool) {
@@ -36,7 +38,7 @@ final class AgentViewSaverView: ScreenSaverView, WKNavigationDelegate {
 				forMainFrameOnly: true
 			))
 		} else {
-			content.addScriptMessageHandler(HerdrBridge(), contentWorld: .page, name: "herdr")
+			link = DaemonLink { [weak self] text in self?.deliver(text) }
 		}
 		let web = WKWebView(frame: bounds, configuration: config)
 		// legacyScreenSaver's window is visible, but WebKit's occlusion tracking
@@ -66,6 +68,7 @@ final class AgentViewSaverView: ScreenSaverView, WKNavigationDelegate {
 		super.startAnimation()
 		paused = false
 		webView?.evaluateJavaScript("window.saver && window.saver.resume()")
+		link?.start()
 	}
 
 	override func stopAnimation() {
@@ -78,8 +81,21 @@ final class AgentViewSaverView: ScreenSaverView, WKNavigationDelegate {
 	override var hasConfigureSheet: Bool { false }
 
 	private func pause() {
+		link?.stop()
 		paused = true
 		webView?.evaluateJavaScript("window.saver && window.saver.pause()")
+	}
+
+	/// One daemon frame into the page; the page decides live vs demo.
+	private func deliver(_ text: String) {
+		guard !paused, let webView else { return }
+		webView.callAsyncJavaScript(
+			"window.saver && window.saver.world(msg)",
+			arguments: ["msg": text],
+			in: nil,
+			in: .page,
+			completionHandler: nil
+		)
 	}
 
 	// MARK: - WKNavigationDelegate

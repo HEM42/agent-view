@@ -63,17 +63,11 @@ double-click to focus that agent's pane in herdr.
 
 ## Screensaver
 
-The same room is also available as a macOS screensaver. Live herdr data
-needs the Agent View daemon from a build that includes the feed publisher
-(this branch: `bun run install:daemon`, or `bun run daemon` in the
-foreground) — the current Homebrew release does not write the feed, so
-the saver just shows the demo loop (marked `DEMO`).
-
-The screensaver sandbox can't reach herdr's socket, so the daemon publishes
-each `herdr agent list` result to
-`~/Library/Application Support/Agent View/agents.json` and the
-screensaver reads it; a missing or stale feed falls back to the demo
-loop (the saver never shows an offline banner).
+The same room is also available as a macOS screensaver. Live data comes from
+the Agent View daemon over a WebSocket on `127.0.0.1:47371` (needs
+`bun run install:daemon`, or `bun run daemon` in the foreground). Without the
+daemon, or while herdr is down, the saver shows the demo loop (marked `DEMO`)
+and never an offline banner.
 
 Building the saver needs the Xcode Command Line Tools (`swiftc`):
 
@@ -83,13 +77,13 @@ bun run install:saver   # → ~/Library/Screen Savers/
 ```
 
 Then pick **Agent View** under System Settings → Wallpaper → Other
-(older macOS: System Settings → Screen Saver). Feed transitions are
-logged — look for `feed: ok`:
+(older macOS: System Settings → Screen Saver). Connection transitions are
+logged in the `daemon` category — look for `daemon: connected`:
 `log show --last 10m --predicate 'subsystem == "com.cygnisec.agentview.saver"'`.
 
-To uninstall, remove `~/Library/Screen Savers/Agent View.saver` (and
-optionally the feed, `~/Library/Application Support/Agent View/agents.json`;
-the rest of that folder belongs to the daemon).
+To uninstall, remove `~/Library/Screen Savers/Agent View.saver`. A leftover
+`~/Library/Application Support/Agent View/agents.json` from older builds can
+be deleted too.
 
 ## Run from source
 
@@ -105,9 +99,9 @@ bun test             # data-layer unit tests
 
 ## Daemon
 
-Agent View's office lives in a small background daemon. It polls herdr and serves the room to the app over a
-WebSocket on `127.0.0.1:47371`. The app installs and upgrades the daemon itself on launch, so a normal
-install needs nothing extra. For source checkouts and development, install it by hand:
+Agent View's office lives in a small background daemon. It polls herdr and serves the room to the app and the
+screensaver over a WebSocket on `127.0.0.1:47371`. The app installs and upgrades the daemon itself on launch, so a
+normal install needs nothing extra. For source checkouts and development, install it by hand:
 
 ```sh
 bun run install:daemon     # bundle, install as a LaunchAgent, start at login

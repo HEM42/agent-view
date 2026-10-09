@@ -1,5 +1,4 @@
 import { FakeSource } from "../shared/fake";
-import { publishFeed } from "../bun/feed";
 import { HerdrCliSource } from "../bun/herdr";
 import { VERSION } from "../shared/version";
 import { startDaemon, stamp } from "./daemon";
@@ -11,7 +10,7 @@ const fakeMode = process.env["HERDR_FAKE"];
 const port = daemonPort(process.env);
 const source = fakeMode
 	? new FakeSource(fakeMode)
-	: new HerdrCliSource((stdout) => void publishFeed(stdout));
+	: new HerdrCliSource();
 
 try {
 	startDaemon({ port, source, version: VERSION });

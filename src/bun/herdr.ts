@@ -65,14 +65,9 @@ async function execHerdr(
 }
 
 export class HerdrCliSource implements AgentSource {
-	/** onOutput receives the raw stdout of every successful list (the screensaver feed). */
-	constructor(private onOutput?: (stdout: string) => void) {}
-
 	async list(): Promise<RawAgent[]> {
 		const { code, stdout } = await execHerdr(["agent", "list"]);
-		const agents = interpretHerdrResult(code, stdout);
-		this.onOutput?.(stdout);
-		return agents;
+		return interpretHerdrResult(code, stdout);
 	}
 
 	async focus(id: string): Promise<void> {

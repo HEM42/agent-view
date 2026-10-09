@@ -1,7 +1,7 @@
 import { Game } from "../mainview/game";
 import { FakeSource } from "../shared/fake";
 import { HerdrPoller } from "../shared/herdr-core";
-import { SaverFeed } from "./live";
+import { RESUME_GRACE_MS, SaverFeed } from "./live";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const game = new Game(canvas);
@@ -9,6 +9,9 @@ const game = new Game(canvas);
 // Live worlds are pushed in by the Swift DaemonLink (never in the System
 // Settings thumbnail, which has no link); the demo loop fills every gap.
 const feed = new SaverFeed();
+// The System Settings thumbnail never connects, so skip the resume grace there.
+const preview = (globalThis as any).AGENTVIEW_PREVIEW === true;
+const start = () => feed.reset(Date.now() - (preview ? RESUME_GRACE_MS : 0));
 let paused = false;
 const demo = new HerdrPoller(new FakeSource("loop", { outage: false }), (snap) => {
 	// an in-flight tick can resolve after pause(); drop it
@@ -29,7 +32,7 @@ const demo = new HerdrPoller(new FakeSource("loop", { outage: false }), (snap) =
 	},
 	resume(): void {
 		paused = false;
-		feed.reset(Date.now());
+		start();
 		void demo.start();
 		game.start();
 	},
@@ -45,6 +48,6 @@ const demo = new HerdrPoller(new FakeSource("loop", { outage: false }), (snap) =
 };
 
 window.addEventListener("resize", () => game.resize());
-feed.reset(Date.now());
+start();
 void demo.start();
 game.start();

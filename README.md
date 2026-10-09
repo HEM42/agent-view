@@ -66,7 +66,7 @@ double-click to focus that agent's pane in herdr.
 
 ```bash
 bun install
-bun run daemon       # live herdr data needs the daemon: foreground here, or install once with bun run install:daemon
+bun run daemon       # foreground daemon (or bun run install:daemon once)
 bun start            # live herdr data, via the daemon
 bun run dev          # live + watch mode, via the daemon
 bun run fake         # HERDR_FAKE=1 — deterministic 90s demo loop, no herdr needed
@@ -80,14 +80,15 @@ Agent View's office lives in a small background daemon. It polls herdr and serve
 WebSocket on `127.0.0.1:47371`. The app shows **daemon not running** until it is installed:
 
 ```sh
-bun run install:daemon     # compile, install as a LaunchAgent, start at login
+bun run install:daemon     # bundle, install as a LaunchAgent, start at login
 bun run uninstall:daemon   # stop and remove (keeps saved state and the log)
 ```
 
 - Log: `~/Library/Logs/Agent View/daemon.log`
 - Check: `curl -s 127.0.0.1:47371/v1/health` and `curl -s 127.0.0.1:47371/v1/world`
 - Restart: `launchctl kickstart -k gui/$UID/com.cygnisec.agentview.daemon`
-- Re-run `install:daemon` after pulling changes to `src/daemon/`.
+- Re-run `bun run install:daemon` after pulling changes.
+- The install bundles the daemon next to a copy of bun, so it needs neither this checkout nor bun on PATH.
 
 For development, `bun run daemon` runs it in the foreground (set `AGENT_VIEW_PORT` to stay off the installed one).
 `bun run fake` / `bun run chaos` start their own in-process daemon on port 47372 and need nothing installed.

@@ -7,6 +7,10 @@
  * Application Support, so the agent depends on neither this checkout nor a
  * bun on PATH. Re-running install upgrades in place. uninstall keeps state/
  * (duel scores, later) and the log.
+ *
+ * --home only redirects the files this writes. launchctl always targets the
+ * current user's gui/<uid> session, so --home is not a sandbox: install and
+ * uninstall load and unload the real LaunchAgent for whoever runs them.
  */
 
 import { existsSync } from "node:fs";
@@ -115,7 +119,9 @@ export async function uninstall(home: string): Promise<string[]> {
 
 export function parseArgs(argv: string[]): { cmd: "install" | "uninstall"; home?: string; port?: number } {
 	const [cmd, ...rest] = argv;
-	if (cmd !== "install" && cmd !== "uninstall") throw new Error("usage: daemon-install.ts install|uninstall [--home <dir>] [--port <n>]");
+	if (cmd !== "install" && cmd !== "uninstall") throw new Error(
+			"usage: daemon-install.ts install|uninstall [--home <dir>] [--port <n>] (--home only redirects files; launchctl always targets the current user's gui/<uid>)",
+		);
 	const out: { cmd: "install" | "uninstall"; home?: string; port?: number } = { cmd };
 	for (let i = 0; i < rest.length; i += 2) {
 		const flag = rest[i]!;

@@ -28,7 +28,10 @@ cask clears the quarantine flag for you. If macOS still blocks the first
 launch, run `xattr -dr com.apple.quarantine "/Applications/Agent View.app"`.
 
 You'll also need [herdr](https://herdr.dev) installed and running — Agent
-View reads its agent list from herdr.
+View reads its agent list from herdr through the Agent View daemon. The app
+gets its data from the daemon, which for now is installed from a source
+checkout with `bun run install:daemon` (see [Daemon](#daemon)); bundling it
+with the app is not done yet.
 
 ## The room
 
@@ -50,7 +53,7 @@ View reads its agent list from herdr.
   whose second R keeps dying.
 - **Daemon the cat** wanders, naps on the couch arm, and if you ignore a
   blocked agent for more than a minute, walks to that desk and stares at you.
-- **Offline is explicit:** if herdr is down you get a blacked-out room and a
+- **Offline is explicit:** if herdr or the daemon is down you get a blacked-out room and a
   flickering OFFLINE banner — never silently stale data.
 
 ## Interaction
@@ -63,8 +66,9 @@ double-click to focus that agent's pane in herdr.
 
 ```bash
 bun install
-bun start            # live herdr data
-bun run dev          # live + watch mode
+bun run daemon       # live herdr data needs the daemon: foreground here, or install once with bun run install:daemon
+bun start            # live herdr data, via the daemon
+bun run dev          # live + watch mode, via the daemon
 bun run fake         # HERDR_FAKE=1 — deterministic 90s demo loop, no herdr needed
 bun run chaos        # randomized soak test
 bun test             # data-layer unit tests
@@ -72,8 +76,8 @@ bun test             # data-layer unit tests
 
 ## Daemon
 
-Agent View's office lives in a small background daemon. It polls herdr and serves the room to the app (and to the
-screensaver) over a WebSocket on `127.0.0.1:47371`. The app shows **daemon not running** until it is installed:
+Agent View's office lives in a small background daemon. It polls herdr and serves the room to the app over a
+WebSocket on `127.0.0.1:47371`. The app shows **daemon not running** until it is installed:
 
 ```sh
 bun run install:daemon     # compile, install as a LaunchAgent, start at login
@@ -90,10 +94,13 @@ For development, `bun run daemon` runs it in the foreground (set `AGENT_VIEW_POR
 
 ## How it works
 
-- **Bun process** (`src/bun/`) polls `herdr agent list` at 1 Hz, normalizes
-  and debounces statuses (2 consecutive polls to change, except `blocked`
-  which is instant — the raised hand is the whole point), and pushes full
-  snapshots to the webview over Electrobun's typed RPC.
+- **Daemon** (`src/daemon/`) runs the herdr poller (`HerdrPoller` in
+  `src/bun/herdr.ts`), which normalizes and debounces statuses (2 consecutive
+  polls to change, except `blocked` which is instant — the raised hand is the
+  whole point), and pushes full world snapshots to clients over a WebSocket on
+  `127.0.0.1:47371`.
+- **Bun process** (`src/bun/`) connects to the daemon (`src/bun/daemon-client.ts`)
+  and forwards each snapshot to the webview over Electrobun's typed RPC.
 - **Webview** (`src/mainview/`) is a 384x216 canvas scene scaled by integer
   factors (WKWebView, `image-rendering: pixelated`). Characters are driven
   by a small state machine over walk lanes; everything y-sorts for depth.

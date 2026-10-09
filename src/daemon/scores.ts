@@ -44,7 +44,9 @@ export class ScoreBook {
 			text = await readFile(this.path, "utf8");
 		} catch (e) {
 			if ((e as NodeJS.ErrnoException).code === "ENOENT") return;
-			await this.quarantine(`unreadable: ${String(e)}`);
+			// EACCES, EIO, a directory...: the file may be fine, so leave it where it is
+			this.byKey = new Map();
+			this.log(`scores file unreadable (left in place): ${String(e)}; starting empty`);
 			return;
 		}
 		try {
@@ -58,12 +60,15 @@ export class ScoreBook {
 
 	private async quarantine(why: string): Promise<void> {
 		this.byKey = new Map();
+		let moved = true;
 		try {
 			await rename(this.path!, `${this.path}.bad`);
 		} catch {
-			// already gone, or not movable: start empty regardless
+			moved = false; // already gone, or not movable: start empty regardless
 		}
-		this.log(`scores file ${why}; moved to ${this.path}.bad, starting empty`);
+		this.log(
+			`scores file ${why}; ${moved ? `moved to ${this.path}.bad` : "could not move it aside"}, starting empty`,
+		);
 	}
 
 	record(winner: Fighter, loser: Fighter): void {

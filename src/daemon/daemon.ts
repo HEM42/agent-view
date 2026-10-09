@@ -76,9 +76,12 @@ export function startDaemon(opts: DaemonOptions): Daemon {
 			focus: (id) => poller.focus(id),
 		},
 	});
-	void book.load().then(() => {
-		loaded = true;
-	});
+	void book
+		.load()
+		.catch((e) => log(`could not load scores: ${String(e)}`))
+		.finally(() => {
+			loaded = true;
+		});
 	void poller.start();
 	const timer = setInterval(tick, 250);
 	return {

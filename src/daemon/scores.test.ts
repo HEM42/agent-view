@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ScoreBook } from "./scores";
@@ -84,6 +84,32 @@ describe("ScoreBook", () => {
 		await b.load();
 		expect(b.rows()).toEqual([]);
 		expect(existsSync(path + ".bad")).toBe(true);
+	});
+
+	test("a read error other than a missing file leaves the file alone and starts empty", async () => {
+		const path = join(dir, "scores.json");
+		await mkdir(path); // a directory: readFile fails with EISDIR, not a parse problem
+		const logs: string[] = [];
+		const b = new ScoreBook(path, (m) => logs.push(m));
+		await b.load();
+		expect(b.rows()).toEqual([]);
+		expect(existsSync(path)).toBe(true);
+		expect(existsSync(path + ".bad")).toBe(false);
+		expect(logs).toHaveLength(1);
+		expect(logs[0]).toContain("left in place");
+	});
+
+	test("the quarantine log says whether the file was moved", async () => {
+		const path = join(dir, "scores.json");
+		await writeFile(path, "{not json");
+		await mkdir(path + ".bad"); // renaming a file onto a directory fails
+		const logs: string[] = [];
+		await new ScoreBook(path, (m) => logs.push(m)).load();
+		expect(logs[0]).toContain("could not move");
+		const ok: string[] = [];
+		await writeFile(join(dir, "b.json"), "{not json");
+		await new ScoreBook(join(dir, "b.json"), (m) => ok.push(m)).load();
+		expect(ok[0]).toContain("moved to");
 	});
 
 	test("a null path never writes", async () => {

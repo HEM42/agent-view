@@ -86,6 +86,8 @@ const REASON_TEXT: Record<string, string> = {
 	"protocol-error": "herdr speaks in tongues",
 	"link-lost": "no data from bun process",
 	"no-daemon": "daemon not running · bun run install:daemon",
+	"daemon-starting": "starting daemon",
+	"daemon-down": "daemon not running · see daemon.log",
 };
 
 /** Room blackout + neon OFFLINE banner. The UI never shows stale data. */

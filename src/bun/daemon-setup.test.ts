@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { dirname } from "node:path";
-import { daemonUpToDate, ensureDaemon, LABEL, LAUNCH_PATH, paths, plistFor } from "./daemon-setup";
+import { daemonUpToDate, ensureDaemon, LABEL, LAUNCH_PATH, managedMode, paths, plistFor, relabelOffline } from "./daemon-setup";
+import type { Snapshot } from "../shared/types";
 
 describe("paths", () => {
 	test("lives under the given home", () => {
@@ -158,5 +159,44 @@ describe("ensureDaemon", () => {
 		});
 		expect(result).toBe("failed");
 		expect(logs.join("\n")).toContain("launchctl exploded");
+	});
+});
+
+describe("managedMode", () => {
+	test("true only for stable and canary without fake mode", () => {
+		expect(managedMode("stable", undefined)).toBe(true);
+		expect(managedMode("canary", undefined)).toBe(true);
+		expect(managedMode("dev", undefined)).toBe(false);
+		expect(managedMode("stable", "busy")).toBe(false);
+		expect(managedMode("canary", "busy")).toBe(false);
+	});
+});
+
+describe("relabelOffline", () => {
+	const snap = (offlineReason?: Snapshot["offlineReason"]): Snapshot =>
+		offlineReason ? { herdrOnline: false, offlineReason, agents: [], ts: 1 } : { herdrOnline: true, agents: [], ts: 1 };
+
+	test("no-daemon becomes daemon-starting while starting", () => {
+		expect(relabelOffline(snap("no-daemon"), "starting").offlineReason).toBe("daemon-starting");
+	});
+	test("no-daemon becomes daemon-down when ready or failed", () => {
+		expect(relabelOffline(snap("no-daemon"), "ready").offlineReason).toBe("daemon-down");
+		expect(relabelOffline(snap("no-daemon"), "failed").offlineReason).toBe("daemon-down");
+	});
+	test("unchanged when unmanaged", () => {
+		const s = snap("no-daemon");
+		expect(relabelOffline(s, "unmanaged")).toEqual(s);
+	});
+	test("other snapshots are unchanged", () => {
+		for (const state of ["unmanaged", "starting", "ready", "failed"] as const) {
+			for (const s of [snap(), snap("server-down"), snap("protocol-error")]) {
+				expect(relabelOffline(s, state)).toEqual(s);
+			}
+		}
+	});
+	test("does not mutate its input", () => {
+		const s = snap("no-daemon");
+		relabelOffline(s, "starting");
+		expect(s.offlineReason).toBe("no-daemon");
 	});
 });

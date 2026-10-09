@@ -1,9 +1,13 @@
-import { BrowserView, BrowserWindow, Utils } from "electrobun/bun";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
+import { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun/bun";
 import { startDaemon } from "../daemon/daemon";
 import { daemonPort } from "../daemon/protocol";
 import type { AgentViewRPC, Snapshot } from "../shared/types";
 import { VERSION } from "../shared/version";
 import { DaemonClient } from "./daemon-client";
+import { ensureDaemon, healthy, managedMode, relabelOffline } from "./daemon-setup";
 import { FakeSource } from "./fake";
 
 const fakeMode = process.env["HERDR_FAKE"];
@@ -19,13 +23,30 @@ if (fakeMode) {
 
 let win: BrowserWindow<typeof rpc>;
 
+function readChannel(): string {
+	try {
+		const v = JSON.parse(readFileSync(resolve(PATHS.RESOURCES_FOLDER, "version.json"), "utf8")) as { channel?: string };
+		return v.channel ?? "dev";
+	} catch {
+		return "dev";
+	}
+}
+
+// the packaged app owns its daemon: it installs/upgrades it and relabels the offline banner accordingly
+const daemonScript = resolve(PATHS.RESOURCES_FOLDER, "app/daemon/daemon.js");
+let daemonState: "unmanaged" | "starting" | "ready" | "failed" = "unmanaged";
+if (managedMode(readChannel(), fakeMode)) {
+	if (existsSync(daemonScript)) daemonState = "starting";
+	else console.warn(`[app] bundled daemon missing at ${daemonScript}; not managing the daemon`);
+}
+
 const client = new DaemonClient({
 	url: `ws://127.0.0.1:${port}/v1/ws`,
 	client: "app",
 	version: VERSION,
 	onSnapshot: (snap: Snapshot) => {
 		try {
-			rpc.send.snapshot(snap);
+			rpc.send.snapshot(relabelOffline(snap, daemonState));
 		} catch {
 			// webview not ready yet; it pulls via getSnapshot on load
 		}
@@ -43,7 +64,7 @@ const rpc = BrowserView.defineRPC<AgentViewRPC>({
 			},
 			getSnapshot: () => {
 				console.log("[rpc] getSnapshot — webview connected");
-				return client.lastSnapshot();
+				return relabelOffline(client.lastSnapshot(), daemonState);
 			},
 			saveShot: async ({ dataUrl }: { dataUrl: string }) => {
 				const dest = process.env["AGENTVIEW_SHOT"];
@@ -77,5 +98,18 @@ win = new BrowserWindow({
 });
 
 client.start();
+
+if (daemonState === "starting") {
+	void ensureDaemon({
+		home: homedir(),
+		script: daemonScript,
+		bun: process.execPath,
+		healthy: () => healthy(port),
+		log: (m) => console.warn(`[app] ${m}`),
+	}).then((outcome) => {
+		daemonState = outcome === "failed" ? "failed" : "ready";
+		console.log(`[app] daemon ${outcome}`);
+	});
+}
 
 console.log(`Agent View started (daemon ws://127.0.0.1:${port}${fakeMode ? `, fake:${fakeMode} in-process` : ""})`);

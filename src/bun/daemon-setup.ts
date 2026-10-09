@@ -10,6 +10,7 @@ import { existsSync } from "node:fs";
 import { chmod, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { DEFAULT_PORT } from "../daemon/protocol";
+import type { Snapshot } from "../shared/types";
 
 export const LABEL = "com.cygnisec.agentview.daemon";
 export const LAUNCH_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
@@ -97,7 +98,7 @@ async function tailLog(log: string): Promise<string> {
 	}
 }
 
-async function healthy(port: number): Promise<boolean> {
+export async function healthy(port: number): Promise<boolean> {
 	try {
 		const r = await fetch(`http://127.0.0.1:${port}/v1/health`, { signal: AbortSignal.timeout(1000) });
 		return r.ok && ((await r.json()) as { ok?: boolean }).ok === true;
@@ -184,4 +185,15 @@ export async function ensureDaemon(opts: {
 		opts.log?.(`daemon setup failed: ${e?.message ?? e}`);
 		return "failed";
 	}
+}
+
+/** True when the packaged app (stable/canary, not fake mode) owns the daemon's lifecycle. */
+export function managedMode(channel: string, fakeMode: string | undefined): boolean {
+	return (channel === "stable" || channel === "canary") && !fakeMode;
+}
+
+/** Replace the source-checkout "no-daemon" hint with one that fits an app-managed daemon. */
+export function relabelOffline(snap: Snapshot, state: "unmanaged" | "starting" | "ready" | "failed"): Snapshot {
+	if (state === "unmanaged" || snap.offlineReason !== "no-daemon") return snap;
+	return { ...snap, offlineReason: state === "starting" ? "daemon-starting" : "daemon-down" };
 }

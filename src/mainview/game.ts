@@ -18,8 +18,14 @@ export class Game {
 	private acc = 0;
 	private last = performance.now();
 	private raf = 0;
-	/** screensaver: true while the room shows the scripted demo */
-	demo = false;
+	/** screensaver: true while the room shows the scripted demo (first duel comes early) */
+	get demo(): boolean {
+		return this.world.duels.demo;
+	}
+
+	set demo(value: boolean) {
+		this.world.duels.demo = value;
+	}
 
 	constructor(canvas: HTMLCanvasElement) {
 		this.renderer = new Renderer(canvas);

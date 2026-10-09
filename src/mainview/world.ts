@@ -16,6 +16,7 @@ import {
 } from "./characters/fsm";
 import { step } from "./characters/locomotion";
 import { DroneFleet, type Overflow } from "./drones";
+import { DuelDirector } from "./duels";
 import { SlotManager } from "./scene/slots";
 import type { Vec2 } from "./scene/layout";
 
@@ -38,12 +39,17 @@ export class World {
 	/** bumped whenever someone passes the door; scene plays the slide anim */
 	doorPulseAt = 0;
 	readonly fleet = new DroneFleet();
+	readonly duels: DuelDirector;
 
 	private spawnQueue: AgentView[] = [];
 	private lastSpawnAt = 0;
 	private lastMessageAt = 0;
 	private latest = new Map<string, AgentView>();
 	private subagents = new Map<string, Subagent[]>();
+
+	constructor(rng: () => number = Math.random) {
+		this.duels = new DuelDirector(rng);
+	}
 
 	reconcile(snap: Snapshot, now: number): void {
 		this.lastMessageAt = now;
@@ -127,6 +133,8 @@ export class World {
 			now,
 			Date.now(),
 		);
+		// after every char has reacted to its status: a fighter the FSM took back cancels the duel this tick
+		this.duels.update(this.chars, this.slots, now);
 	}
 
 	private updateChar(c: Character, dtMs: number, now: number): void {

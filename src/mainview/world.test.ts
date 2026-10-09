@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import type { Snapshot } from "../shared/types";
+import type { AgentView, Snapshot } from "../shared/types";
+import type { Character } from "./characters/character";
+import { GAP_MIN_MS } from "./duels";
 import { plusPos, swarmPos } from "./characters/drone";
-import { DESKS } from "./scene/layout";
+import { DESKS, LANES } from "./scene/layout";
 import { World } from "./world";
 
 const SNAP: Snapshot = { herdrOnline: true, agents: [], ts: 0 };
@@ -41,5 +43,84 @@ describe("World.pickDrone", () => {
 		const more = w.pickDrone({ x: plus.x + 5, y: plus.y + 2 }, 1234);
 		expect(more?.kind === "more" && more.overflow.hidden.length).toBe(1);
 		expect(w.pickDrone({ x: 380, y: 210 }, 1234)).toBeNull();
+	});
+});
+
+/** A Character without sprites: World.update only needs anim.play/update. */
+function fakeChar(id: string, x: number): Character {
+	return {
+		id,
+		agent: "claude",
+		project: `p-${id}`,
+		label: id,
+		accent: id === "a" ? "#FF2E88" : "#2DE2E6",
+		outfitBase: "#E8825A",
+		focused: false,
+		pos: { x, y: LANES[2] },
+		facing: 1,
+		path: [],
+		state: "IDLE_STANDING",
+		pending: null,
+		slot: null,
+		desiredStatus: "idle",
+		idleSince: 0,
+		statusSince: 0,
+		gone: false,
+		duelPose: null,
+		walkJitter: 0,
+		retryAt: 0,
+		anim: { play() {}, update() {} },
+	} as unknown as Character;
+}
+
+const view = (id: string, status: AgentView["status"]): AgentView => ({
+	id,
+	agent: "claude",
+	project: `p-${id}`,
+	status,
+	focused: false,
+	subagents: [],
+});
+
+function duelWorld(): World {
+	const w = new World(() => 0);
+	w.chars.set("a", fakeChar("a", 130));
+	w.chars.set("b", fakeChar("b", 260));
+	w.reconcile({ herdrOnline: true, agents: [view("a", "idle"), view("b", "idle")], ts: 0 }, 0);
+	return w;
+}
+
+function runUntil(w: World, from: number, pred: () => boolean): number {
+	let now = from;
+	while (!pred()) {
+		if (now > from + 400_000) throw new Error("timed out");
+		now += 1000 / 60;
+		w.update(1000 / 60, now);
+	}
+	return now;
+}
+
+describe("World duels", () => {
+	test("the self-healing rule does not fight a long duel", () => {
+		const w = duelWorld();
+		let now = runUntil(w, 0, () => w.duels.active()?.phase === "ignite");
+		expect(now).toBeGreaterThanOrEqual(GAP_MIN_MS);
+		const ignitedAt = now;
+		now = runUntil(w, now, () => w.duels.active()?.phase === "result");
+		// longer than RETRY_MS (1.5 s): the self-heal rule ran and left them alone
+		expect(now - ignitedAt).toBeGreaterThan(1500);
+		expect(w.chars.get("a")!.state).toBe("DUELING");
+		expect(w.chars.get("b")!.state).toBe("DUELING");
+	});
+
+	test("a status flip mid-duel reaches the FSM in the same update", () => {
+		const w = duelWorld();
+		let now = runUntil(w, 0, () => w.duels.active()?.phase === "clash");
+		w.reconcile({ herdrOnline: true, agents: [view("a", "working"), view("b", "idle")], ts: now }, now);
+		now += 1000 / 60;
+		w.update(1000 / 60, now);
+		expect(w.chars.get("a")!.pending?.state).toBe("WORKING");
+		expect(w.duels.active()).toBeNull();
+		expect(w.chars.get("b")!.duelPose).toBeNull();
 	});
 });

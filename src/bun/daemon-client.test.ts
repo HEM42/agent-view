@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { startServer, type DaemonServer } from "../daemon/server";
 import { manualFeed, snap, waitFor } from "../daemon/testing";
 import type { Snapshot } from "../shared/types";
@@ -15,11 +15,12 @@ const FAST: Partial<ClientTimings> = {
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
+	setSystemTime(); // back to the real clock
 	for (const fn of cleanups.splice(0)) fn();
 });
 
 function serve(feed = manualFeed().feed, port = 0, extra: { heartbeatMs?: number; log?: (m: string) => void } = {}): DaemonServer {
-	const s = startServer({ port, feed, version: "t", log: () => {}, ...extra });
+	const s = startServer({ port, feed, version: "t", log: () => {}, heartbeatMs: 50, ...extra });
 	cleanups.push(() => s.stop());
 	return s;
 }
@@ -95,6 +96,18 @@ describe("DaemonClient", () => {
 		await waitFor(() => online(got).length >= 2, 3000);
 		// the world is sent on connect, before the hello that gets logged
 		await waitFor(() => log.filter((l) => l.includes("connected")).length >= 2);
+	});
+
+	test("a clock jump from sleeping does not drop a healthy socket", async () => {
+		const log: string[] = [];
+		// no heartbeat: nothing refreshes lastWorldAt between the jump and the next tick
+		const s = serve(manualFeed().feed, 0, { heartbeatMs: 60_000, log: (m) => log.push(m) });
+		const { got } = connect(s.port);
+		await waitFor(() => online(got).length >= 1);
+		setSystemTime(new Date(Date.now() + 60_000)); // the Mac slept for a minute
+		await Bun.sleep(150); // several ticks, still inside deadMs of real time
+		expect(offline(got, "no-daemon").length).toBe(0);
+		expect(log.filter((l) => l.includes("connected")).length).toBe(1);
 	});
 
 	test("focus round trip", async () => {

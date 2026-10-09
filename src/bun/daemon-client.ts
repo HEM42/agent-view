@@ -50,6 +50,7 @@ export class DaemonClient {
 	private stopped = true;
 	private lastWorldAt = 0;
 	private openedAt = 0;
+	private lastTickAt = 0;
 	private lastOfflineAt = 0;
 	private fault: Fault = "no-daemon";
 	private backoff: number;
@@ -72,6 +73,7 @@ export class DaemonClient {
 		if (!this.stopped) return;
 		this.stopped = false;
 		this.lastWorldAt = Date.now(); // the offline clock starts at launch
+		this.lastTickAt = this.lastWorldAt;
 		this.ticker = setInterval(() => this.tick(), this.t.tickMs);
 		this.connect();
 	}
@@ -156,6 +158,15 @@ export class DaemonClient {
 
 	private tick(): void {
 		const now = Date.now();
+		// A gap this long between ticks means the process was suspended (the Mac slept):
+		// the wall clock jumped, but the daemon's heartbeat has not had a chance to run
+		// yet. Judging a healthy loopback socket by that jump would drop it and empty the
+		// office, so restart the silence clocks and give the daemon its full window.
+		if (this.lastTickAt > 0 && now - this.lastTickAt > this.t.deadMs) {
+			this.lastWorldAt = now;
+			this.openedAt = now;
+		}
+		this.lastTickAt = now;
 		// Open but silent: half-open after sleep, or a stuck daemon. Measured from the
 		// later of the last world and this socket's open, so a fresh reconnect gets its
 		// full window; a connect still in flight is left to its own close/error.

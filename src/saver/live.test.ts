@@ -28,6 +28,15 @@ describe("SaverFeed", () => {
 		expect(f.live(100)).toEqual(snap({ ts: 5 }));
 	});
 
+	test("the daemon's room rides on the live snapshot; no scores means no room", () => {
+		const room = { duel: null, scores: [{ key: "k", agent: "claude", project: "n", wins: 1, losses: 0 }] };
+		const f = fresh(0);
+		f.accept(JSON.stringify({ t: "world", api: 1, snapshot: snap({ ts: 5 }), world: room }), 100);
+		expect(f.live(100)).toEqual(snap({ ts: 5, room }));
+		f.accept(world(snap({ ts: 6 })), 200);
+		expect("room" in f.live(200)!).toBe(false);
+	});
+
 	test("herdr offline in the daemon means demo (after the grace)", () => {
 		const f = fresh(0);
 		f.accept(world(snap({ herdrOnline: false, offlineReason: "server-down" })), 2000);

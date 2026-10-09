@@ -56,9 +56,34 @@ describe("DaemonClient", () => {
 		const s = serve(manualFeed(snap({ ts: 11 })).feed, 0, { log: (m) => log.push(m) });
 		const { c, got } = connect(s.port);
 		await waitFor(() => online(got).length >= 1);
-		expect(got[0]).toEqual(snap({ ts: 11 }));
-		expect(c.lastSnapshot()).toEqual(snap({ ts: 11 }));
+		expect(got[0]).toEqual({ ...snap({ ts: 11 }), room: { duel: null, scores: [] } });
+		expect(c.lastSnapshot()).toEqual({ ...snap({ ts: 11 }), room: { duel: null, scores: [] } });
 		await waitFor(() => log.some((l) => l.includes("app test") && l.includes("connected")));
+	});
+
+	test("a world with scores gives the snapshot a room; one without gives none", async () => {
+		const row = { key: "claude·n", agent: "claude", project: "n", wins: 2, losses: 1 };
+		let world: unknown = { duel: null, scores: [row] };
+		const srv = Bun.serve({
+			hostname: "127.0.0.1",
+			port: 0,
+			fetch: (req, server) => (server.upgrade(req) ? undefined : new Response("no", { status: 400 })),
+			websocket: {
+				open: (ws) => {
+					ws.send(JSON.stringify({ t: "world", api: 1, snapshot: snap({ ts: 3 }), world }));
+				},
+				message() {},
+			},
+		});
+		cleanups.push(() => srv.stop(true));
+		const a = connect(srv.port);
+		await waitFor(() => online(a.got).length >= 1);
+		expect(a.got[0]!.room).toEqual({ duel: null, scores: [row] });
+		expect(a.c.lastSnapshot().room).toEqual({ duel: null, scores: [row] });
+		world = {};
+		const b = connect(srv.port);
+		await waitFor(() => online(b.got).length >= 1);
+		expect("room" in b.got[0]!).toBe(false);
 	});
 
 	test("before the first world, lastSnapshot is the no-daemon snapshot with ts 0", () => {

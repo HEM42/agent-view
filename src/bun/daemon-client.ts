@@ -1,4 +1,4 @@
-import { parseServerMessage, type Reply } from "../daemon/protocol";
+import { parseServerMessage, roomOf, type Reply } from "../daemon/protocol";
 import type { Snapshot } from "../shared/types";
 
 export interface ClientTimings {
@@ -135,8 +135,9 @@ export class DaemonClient {
 				this.lastWorldAt = Date.now();
 				this.backoff = this.t.backoffMinMs;
 				this.fault = "no-daemon";
-				this.last = msg.snapshot;
-				this.opts.onSnapshot(msg.snapshot);
+				const room = roomOf(msg.world);
+				this.last = room ? { ...msg.snapshot, room } : msg.snapshot;
+				this.opts.onSnapshot(this.last);
 				return;
 			case "incompatible":
 				this.fault = "protocol-error";

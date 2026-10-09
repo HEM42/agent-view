@@ -1,5 +1,5 @@
-import { parseServerMessage } from "../daemon/protocol";
-import type { Snapshot } from "../shared/types";
+import { parseServerMessage, roomOf } from "../daemon/protocol";
+import type { RoomState, Snapshot } from "../shared/types";
 
 /** A pushed world older than this is gone: the daemon sends one at least every second. */
 export const STALE_MS = 3000; // keep STALE_MS + ONLINE_INTERVAL_MS inside LINK_LOST_MS (guarded in live.test.ts)
@@ -15,6 +15,7 @@ export type Mode = "live" | "demo" | "wait";
  */
 export class SaverFeed {
 	private last: Snapshot | null = null;
+	private room: RoomState | null = null;
 	private lastAt = 0;
 	private resumedAt = 0;
 	private lastBeatAt = 0;
@@ -24,12 +25,14 @@ export class SaverFeed {
 		const msg = parseServerMessage(text);
 		if (msg.kind !== "world") return;
 		this.last = msg.snapshot;
+		this.room = roomOf(msg.world);
 		this.lastAt = now;
 	}
 
 	/** On (re)start: a resumed saver never trusts a world from before the pause. */
 	reset(now: number): void {
 		this.last = null;
+		this.room = null;
 		this.lastAt = 0;
 		this.resumedAt = now;
 		this.lastBeatAt = 0;
@@ -53,6 +56,7 @@ export class SaverFeed {
 
 	/** The snapshot to show, or null when the room isn't live. */
 	live(now: number): Snapshot | null {
-		return this.mode(now) === "live" ? this.last : null;
+		if (this.mode(now) !== "live" || !this.last) return null;
+		return this.room ? { ...this.last, room: this.room } : this.last;
 	}
 }

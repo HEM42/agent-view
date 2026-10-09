@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { hostAllowed, isAddrInUse, startServer, type DaemonServer } from "./server";
-import { manualFeed, rawRequest, snap } from "./testing";
+import { manualFeed, rawRequest, snap, TestSocket, waitFor } from "./testing";
 
 const servers: DaemonServer[] = [];
 afterEach(() => {
@@ -99,5 +99,124 @@ describe("startup", () => {
 		expect(err).not.toBeNull();
 		expect(isAddrInUse(err)).toBe(true);
 		expect(isAddrInUse(new Error("something else"))).toBe(false);
+	});
+});
+
+const sockets: TestSocket[] = [];
+afterEach(() => {
+	for (const s of sockets.splice(0)) s.close();
+});
+
+async function client(port: number): Promise<TestSocket> {
+	const s = new TestSocket(`ws://127.0.0.1:${port}/v1/ws`);
+	sockets.push(s);
+	await s.opened();
+	return s;
+}
+
+const worlds = (s: TestSocket) => s.messages.filter((m) => m.t === "world");
+const replies = (s: TestSocket) => s.messages.filter((m) => m.t === "reply");
+
+describe("WebSocket", () => {
+	test("a client gets the current world on connect", async () => {
+		const f = manualFeed(snap({ ts: 7 }));
+		const s = serve(f.feed);
+		const c = await client(s.port);
+		await waitFor(() => worlds(c).length >= 1);
+		expect(worlds(c)[0]).toEqual({ t: "world", api: 1, snapshot: snap({ ts: 7 }), world: {} });
+	});
+
+	test("every emit is broadcast to every client", async () => {
+		const f = manualFeed();
+		const s = serve(f.feed, { heartbeatMs: 60_000 });
+		const a = await client(s.port);
+		const b = await client(s.port);
+		await waitFor(() => s.clients() === 2);
+		f.emit(snap({ ts: 99 }));
+		await waitFor(() => worlds(a).some((m) => m.snapshot.ts === 99) && worlds(b).some((m) => m.snapshot.ts === 99));
+		const health: any = await (await fetch(`http://127.0.0.1:${s.port}/v1/health`)).json();
+		expect(health.clients).toBe(2);
+	});
+
+	test("the heartbeat resends the world while the feed is quiet", async () => {
+		const s = serve(manualFeed().feed, { heartbeatMs: 100 });
+		const c = await client(s.port);
+		await waitFor(() => worlds(c).length >= 4, 1500);
+	});
+
+	test("hello is logged with the client's name and version", async () => {
+		const log: string[] = [];
+		const s = serve(manualFeed().feed, { log: (m) => log.push(m) });
+		const c = await client(s.port);
+		c.send({ t: "hello", client: "app", version: "0.1.0" });
+		await waitFor(() => log.some((l) => l.includes("app 0.1.0") && l.includes("connected")));
+		c.close();
+		await waitFor(() => log.some((l) => l.includes("app 0.1.0") && l.includes("left")));
+	});
+
+	test("focus reaches the feed and the reply carries the request id", async () => {
+		const f = manualFeed();
+		const s = serve(f.feed);
+		const c = await client(s.port);
+		c.send({ t: "focus", id: "r1", agent: "term_1" });
+		await waitFor(() => replies(c).length === 1);
+		expect(replies(c)[0]).toEqual({ t: "reply", id: "r1", ok: true });
+		expect(f.focused).toEqual(["term_1"]);
+	});
+
+	test("focus failure is passed through", async () => {
+		const f = manualFeed();
+		f.focusResult = { ok: false, error: "unknown agent id" };
+		const s = serve(f.feed);
+		const c = await client(s.port);
+		c.send({ t: "focus", id: "r2", agent: "nope" });
+		await waitFor(() => replies(c).length === 1);
+		expect(replies(c)[0]).toEqual({ t: "reply", id: "r2", ok: false, error: "unknown agent id" });
+	});
+
+	test("focus without an agent is a bad request", async () => {
+		const s = serve();
+		const c = await client(s.port);
+		c.send({ t: "focus", id: "r3" });
+		await waitFor(() => replies(c).length === 1);
+		expect(replies(c)[0]).toEqual({ t: "reply", id: "r3", ok: false, error: "bad arguments" });
+	});
+
+	test("unknown commands, including Object.prototype names, are answered", async () => {
+		const s = serve();
+		const c = await client(s.port);
+		c.send({ t: "launch", id: "u1" });
+		c.send({ t: "toString", id: "u2" });
+		c.send({ t: "__proto__", id: "u3" });
+		await waitFor(() => replies(c).length === 3);
+		for (const r of replies(c)) expect(r).toMatchObject({ ok: false, error: "unknown command" });
+	});
+
+	test("malformed messages never kill the connection; answerable ones get a reply", async () => {
+		const log: string[] = [];
+		const s = serve(manualFeed().feed, { log: (m) => log.push(m) });
+		const c = await client(s.port);
+		c.send("{not json");
+		c.send({ t: "focus" }); // no id: dropped
+		c.send({ id: "m1" }); // no t: answered
+		c.sendBinary(new Uint8Array([1, 2, 3]));
+		c.send({ t: "focus", id: "m2", agent: "a" });
+		await waitFor(() => replies(c).length === 2);
+		expect(replies(c)[0]).toEqual({ t: "reply", id: "m1", ok: false, error: "missing t" });
+		expect(replies(c)[1]).toMatchObject({ id: "m2", ok: true });
+		expect(c.closed).toBe(false);
+		expect(log.filter((l) => l.includes("bad message")).length).toBe(1); // once per client
+	});
+
+	test("an oversized message closes only that client", async () => {
+		const f = manualFeed();
+		const s = serve(f.feed, { heartbeatMs: 60_000 });
+		const big = await client(s.port);
+		const other = await client(s.port);
+		big.send("x".repeat(70_000));
+		await waitFor(() => big.closed);
+		f.emit(snap({ ts: 123 }));
+		await waitFor(() => worlds(other).some((m) => m.snapshot.ts === 123));
+		expect((await fetch(`http://127.0.0.1:${s.port}/v1/health`)).status).toBe(200);
 	});
 });

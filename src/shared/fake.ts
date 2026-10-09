@@ -95,6 +95,7 @@ const SCRIPT: Step[] = [
 	{ at: 8, until: 9, apply: (w) => w.set(2, "idle") }, // 1s blip: debounced away
 	{ at: 12, apply: (w) => w.set(1, "blocked") }, // hand up — must be instant
 	{ at: 18, apply: (w) => w.set(1, "working") },
+	{ at: 24, until: 55, apply: (w) => w.set(1, "idle") }, // two idlers long enough for the demo's early lightsaber duel
 	{ at: 20, apply: (w) => w.add("claude", "agent-view", "working") }, // walk-in
 	{ at: 30, apply: (w) => w.set(3, "unknown") }, // confused state
 	{ at: 40, apply: (w) => w.remove(3) }, // walk-out

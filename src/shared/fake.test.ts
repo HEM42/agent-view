@@ -53,3 +53,20 @@ describe("FakeSource subagent scenes", () => {
 		expect((await src.list())[0]!.subagents[0]!.startedAt).toBe(T0.getTime() + 92_000);
 	});
 });
+
+describe("FakeSource duel window", () => {
+	test("agents 0 and 1 idle together from 24s to 55s: room for the demo's early lightsaber duel", async () => {
+		const statusAt = async (s: number) => {
+			setSystemTime(T0);
+			const src = new FakeSource("1");
+			setSystemTime(at(s));
+			return (await src.list()).map((a) => a.status);
+		};
+		expect((await statusAt(20))[1]).toBe("working");
+		for (const s of [24, 40, 54]) {
+			const st = await statusAt(s);
+			expect([st[0], st[1]], `${s}s`).toEqual(["idle", "idle"]);
+		}
+		expect((await statusAt(56))[1]).toBe("working");
+	});
+});

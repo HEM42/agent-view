@@ -37,7 +37,7 @@ describe("HTTP", () => {
 		const s = serve(f.feed);
 		const res = await fetch(`http://127.0.0.1:${s.port}/v1/world`);
 		expect(res.status).toBe(200);
-		expect(await res.json()).toEqual({ t: "world", api: 1, snapshot: snap({ ts: 42 }), world: {} });
+		expect(await res.json()).toEqual({ t: "world", api: 1, snapshot: snap({ ts: 42 }), world: { duel: null, scores: [] } });
 	});
 
 	test("GET /v1/health", async () => {
@@ -123,7 +123,7 @@ describe("WebSocket", () => {
 		const s = serve(f.feed);
 		const c = await client(s.port);
 		await waitFor(() => worlds(c).length >= 1);
-		expect(worlds(c)[0]).toEqual({ t: "world", api: 1, snapshot: snap({ ts: 7 }), world: {} });
+		expect(worlds(c)[0]).toEqual({ t: "world", api: 1, snapshot: snap({ ts: 7 }), world: { duel: null, scores: [] } });
 	});
 
 	test("every emit is broadcast to every client", async () => {

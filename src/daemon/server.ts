@@ -1,6 +1,6 @@
 import type { ServerWebSocket } from "bun";
-import type { Snapshot } from "../shared/types";
-import { parseClientMessage, worldMessage, type Reply, type World } from "./protocol";
+import type { RoomState, Snapshot } from "../shared/types";
+import { parseClientMessage, worldMessage, type Reply } from "./protocol";
 
 /** What the server needs from the poller: the latest snapshot, each new one, and focus. */
 export interface SnapshotFeed {
@@ -15,6 +15,8 @@ export interface ServerOptions {
 	version: string;
 	/** resend the latest world to a client after this much silence (default 1000) */
 	heartbeatMs?: number;
+	/** the shared room (duel, scores); defaults to the empty room */
+	world?: () => RoomState;
 	log?: (msg: string) => void;
 }
 
@@ -73,8 +75,7 @@ export function startServer(opts: ServerOptions): DaemonServer {
 	const sockets = new Set<ServerWebSocket<Conn>>();
 	let nextId = 1;
 
-	// pieces 2 and 3 fill this in
-	const world = (): World => ({});
+	const world = opts.world ?? ((): RoomState => ({ duel: null, scores: [] }));
 	const current = (): string => JSON.stringify(worldMessage(opts.feed.last(), world()));
 	const log = opts.log ?? ((m: string) => console.log(m));
 	const heartbeatMs = opts.heartbeatMs ?? HEARTBEAT_MS;

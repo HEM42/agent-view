@@ -2,6 +2,8 @@ import { FakeSource } from "../shared/fake";
 import { HerdrCliSource } from "../bun/herdr";
 import { SubagentStore } from "../bun/subagents";
 import { VERSION } from "../shared/version";
+import { homedir } from "node:os";
+import { paths } from "../bun/daemon-setup";
 import { startDaemon, stamp } from "./daemon";
 import { daemonPort } from "./protocol";
 import { isAddrInUse } from "./server";
@@ -14,7 +16,12 @@ const source = fakeMode
 	: new HerdrCliSource(new SubagentStore());
 
 try {
-	startDaemon({ port, source, version: VERSION });
+	startDaemon({
+		port,
+		source,
+		version: VERSION,
+		scoresPath: fakeMode ? null : `${paths(homedir()).state}/scores.json`,
+	});
 } catch (e) {
 	if (isAddrInUse(e)) {
 		stamp(`EADDRINUSE on 127.0.0.1:${port}`);

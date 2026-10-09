@@ -1,4 +1,8 @@
 import type { RPCSchema } from "electrobun/bun";
+import type { DuelInfo } from "./duel-timeline";
+import type { ScoreRow } from "../daemon/scores";
+
+export type { ScoreRow };
 
 export type AgentStatus = "idle" | "working" | "blocked" | "unknown";
 
@@ -28,6 +32,7 @@ export interface Snapshot {
 	offlineReason?: OfflineReason; // present iff !herdrOnline
 	agents: AgentView[]; // [] when offline; sorted by id (stable order)
 	ts: number; // emit time; renderer treats >5s silence as link lost
+	room?: RoomState; // the daemon's shared duel and scores; absent without a daemon
 }
 
 /** Each side's block declares what THAT side handles. */
@@ -61,3 +66,9 @@ export type AgentViewRPC = {
 		};
 	}>;
 };
+
+/** The shared room the daemon serves beside the agents: the running duel and the scoreboard. */
+export interface RoomState {
+	duel: DuelInfo | null;
+	scores: ScoreRow[];
+}

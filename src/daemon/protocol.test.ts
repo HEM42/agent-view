@@ -6,14 +6,16 @@ import {
 	daemonPort,
 	parseClientMessage,
 	parseServerMessage,
+	roomOf,
 	worldMessage,
 } from "./protocol";
 
 const snap: Snapshot = { herdrOnline: true, agents: [], ts: 5 };
+const EMPTY_ROOM = { duel: null, scores: [] };
 
 describe("worldMessage", () => {
 	test("wraps the snapshot with the api version", () => {
-		expect(worldMessage(snap, {})).toEqual({ t: "world", api: API_VERSION, snapshot: snap, world: {} });
+		expect(worldMessage(snap, EMPTY_ROOM)).toEqual({ t: "world", api: API_VERSION, snapshot: snap, world: EMPTY_ROOM });
 	});
 });
 
@@ -59,7 +61,7 @@ describe("parseClientMessage", () => {
 
 describe("parseServerMessage", () => {
 	test("world", () => {
-		expect(parseServerMessage(JSON.stringify(worldMessage(snap, {})))).toEqual({ kind: "world", snapshot: snap, world: {} });
+		expect(parseServerMessage(JSON.stringify(worldMessage(snap, EMPTY_ROOM)))).toEqual({ kind: "world", snapshot: snap, world: EMPTY_ROOM });
 	});
 
 	test("world from another api version", () => {
@@ -97,4 +99,37 @@ describe("daemonPort", () => {
 			expect(daemonPort({ AGENT_VIEW_PORT: v })).toBe(DEFAULT_PORT);
 		}
 	});
+});
+
+describe("roomOf", () => {
+	const duel = { id: "d1", a: "x", b: "y", centerX: 200, clashes: 6, winner: "x", startAt: 5 };
+	const row = { key: "claude·n", agent: "claude", project: "n", wins: 1, losses: 0 };
+
+	test("a world without a scores array is no room", () => {
+		expect(roomOf({})).toBeNull();
+		expect(roomOf({ duel: null })).toBeNull();
+		expect(roomOf({ scores: "x" })).toBeNull();
+		expect(roomOf(null)).toBeNull();
+		expect(roomOf(7)).toBeNull();
+	});
+
+	test("a valid room passes through", () => {
+		expect(roomOf({ duel, scores: [row] })).toEqual({ duel, scores: [row] });
+		expect(roomOf({ duel: null, scores: [] })).toEqual({ duel: null, scores: [] });
+	});
+
+	test("a malformed duel becomes null", () => {
+		expect(roomOf({ duel: { ...duel, clashes: "6" }, scores: [] })).toEqual({ duel: null, scores: [] });
+		expect(roomOf({ duel: 3, scores: [] })).toEqual({ duel: null, scores: [] });
+		expect(roomOf({ scores: [] })).toEqual({ duel: null, scores: [] });
+	});
+
+	test("malformed rows are dropped", () => {
+		expect(roomOf({ duel: null, scores: [row, { ...row, wins: 1.5 }, null, "x", { key: "k" }] })?.scores).toEqual([row]);
+	});
+});
+
+test("a world without scores parses as is", () => {
+	const m = parseServerMessage(JSON.stringify({ t: "world", api: 1, snapshot: snap, world: { other: 1 } }));
+	expect(m).toEqual({ kind: "world", snapshot: snap, world: { other: 1 } });
 });

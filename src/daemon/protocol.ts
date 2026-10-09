@@ -1,4 +1,5 @@
-import type { Snapshot } from "../shared/types";
+import type { DuelInfo } from "../shared/duel-timeline";
+import type { RoomState, ScoreRow, Snapshot } from "../shared/types";
 
 /**
  * The daemon's wire format (spec: "Protocol (api: 1)"). Everything here is
@@ -7,15 +8,12 @@ import type { Snapshot } from "../shared/types";
 export const API_VERSION = 1;
 export const DEFAULT_PORT = 47371;
 
-/** Shared room state beyond the agent list. Empty for now; duels and seats add fields. */
-export type World = Record<string, unknown>;
-
 /** Full state, sent on connect, on every poller emit and as the heartbeat. */
 export interface WorldMessage {
 	t: "world";
 	api: number;
 	snapshot: Snapshot;
-	world: World;
+	world: RoomState;
 }
 
 export interface Reply {
@@ -32,7 +30,7 @@ export type ClientMessage =
 	| { kind: "invalid"; error: string; id?: string };
 
 export type ServerMessage =
-	| { kind: "world"; snapshot: Snapshot; world: World }
+	| { kind: "world"; snapshot: Snapshot; world: Record<string, unknown> }
 	| { kind: "incompatible"; api: unknown }
 	| { kind: "reply"; reply: Reply }
 	| { kind: "invalid" };
@@ -48,7 +46,7 @@ function parseJson(text: string): unknown {
 	}
 }
 
-export function worldMessage(snapshot: Snapshot, world: World): WorldMessage {
+export function worldMessage(snapshot: Snapshot, world: RoomState): WorldMessage {
 	return { t: "world", api: API_VERSION, snapshot, world };
 }
 
@@ -101,4 +99,33 @@ export function daemonPort(env: Record<string, string | undefined>): number {
 	const raw = env["AGENT_VIEW_PORT"] ?? "";
 	const n = /^\d+$/.test(raw) ? Number(raw) : NaN;
 	return n >= 1 && n <= 65535 ? n : DEFAULT_PORT;
+}
+
+const isFiniteNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
+function duelOf(v: unknown): DuelInfo | null {
+	if (!isObject(v)) return null;
+	const { id, a, b, centerX, clashes, winner, startAt } = v;
+	if (typeof id !== "string" || typeof a !== "string" || typeof b !== "string" || typeof winner !== "string") return null;
+	if (!isFiniteNum(centerX) || !isFiniteNum(clashes) || !isFiniteNum(startAt)) return null;
+	return { id, a, b, centerX, clashes, winner, startAt };
+}
+
+function rowOf(v: unknown): ScoreRow | null {
+	if (!isObject(v)) return null;
+	const { key, agent, project, wins, losses } = v;
+	if (typeof key !== "string" || typeof agent !== "string" || typeof project !== "string") return null;
+	if (!Number.isInteger(wins) || !Number.isInteger(losses)) return null;
+	return { key, agent, project, wins: wins as number, losses: losses as number };
+}
+
+/**
+ * The shared room out of a received world, or null when the daemon sent none
+ * (no `scores` array: an older daemon), in which case clients keep local duels.
+ * A malformed duel becomes null; malformed rows are dropped.
+ */
+export function roomOf(world: unknown): RoomState | null {
+	if (!isObject(world) || !Array.isArray(world["scores"])) return null;
+	const scores = world["scores"].map(rowOf).filter((r): r is ScoreRow => r !== null);
+	return { duel: duelOf(world["duel"]), scores };
 }

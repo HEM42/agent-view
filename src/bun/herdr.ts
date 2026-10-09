@@ -79,9 +79,10 @@ export class HerdrCliSource implements AgentSource {
 		const { code, stdout } = await execHerdr(["agent", "list"]);
 		const agents = interpretHerdrResult(code, stdout);
 		if (!this.subagents) return agents;
-		const joined = joinSubagents(agents, await this.subagents.read());
-		// only a successful list may retire pane directories
-		void this.subagents.prune(agents.flatMap((a) => (a.pane_id ? [a.pane_id] : [])));
+		// subagent data is a side channel: a broken store degrades to "no subagents", never a herdr failure
+		const joined = joinSubagents(agents, await this.subagents.read().catch(() => new Map()));
+		// only a successful list may retire pane directories; fire-and-forget, so its rejection must be handled here
+		void this.subagents.prune(agents.flatMap((a) => (a.pane_id ? [a.pane_id] : []))).catch(() => {});
 		return joined;
 	}
 

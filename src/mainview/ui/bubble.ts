@@ -1,5 +1,5 @@
 import { decodeSheet, type DecodedSheet } from "../sprites/pixel";
-import { BUBBLES, ZGLYPH } from "../sprites/sheets/fx";
+import { BUBBLES, STARS, ZGLYPH } from "../sprites/sheets/fx";
 import type { Character } from "../characters/character";
 import { bubbleFor, hopOffset } from "../characters/character";
 
@@ -21,6 +21,7 @@ const Z_CAP = 3;
 export class BubbleLayer {
 	private bubbles: DecodedSheet = decodeSheet(BUBBLES);
 	private zglyph: DecodedSheet = decodeSheet(ZGLYPH);
+	private stars: DecodedSheet = decodeSheet(STARS);
 	private zs = new Map<string, { particles: ZParticle[]; lastSpawn: number }>();
 
 	draw(
@@ -31,6 +32,12 @@ export class BubbleLayer {
 		const liveSleepers = new Set<string>();
 
 		for (const c of chars) {
+			if (c.state === "DUELING" && c.duelPose === "down") {
+				// duel loser: dizzy stars, deliberately unlike any status bubble
+				const f = this.stars.get(`stars.${Math.floor(now / 250) % 2}`);
+				if (f) ctx.drawImage(f.canvas, Math.round(c.pos.x - c.facing * 2) - f.anchorX, Math.round(c.pos.y - 14) - f.anchorY);
+				continue;
+			}
 			const kind = bubbleFor(c);
 			if (kind === "bang" || kind === "question") {
 				const phase = Math.floor(now / 400) % 2;

@@ -130,9 +130,13 @@ export class AnimationPlayer {
 		}
 	}
 
+	/** sheet key of the frame on screen (duel grips are looked up by it) */
+	frameName(): string {
+		return this.anim.frames[this.index]!.frame;
+	}
+
 	frame(): DecodedFrame {
-		const name = this.anim.frames[this.index]!.frame;
-		const f = this.sheet.get(name);
+		const f = this.sheet.get(this.frameName());
 		if (f) return f;
 		// missing frame: fall back to anything rather than crash the loop
 		return this.sheet.values().next().value as DecodedFrame;

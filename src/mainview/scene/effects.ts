@@ -25,10 +25,24 @@ interface LetterState {
 
 export const SIGN_LETTERS = ["h", "e", "r", "d", "r2"] as const;
 
+// ---- lightsaber clash sparks ----
+
+interface SparkParticle {
+	x: number;
+	y: number;
+	vx: number;
+	vy: number;
+	color: string;
+	bornAt: number;
+}
+
+const SPARK_LIFE_MS = 300;
+
 export class Effects {
 	private drops: Drop[] = [];
 	private motes: { x: number; y: number; phase: number }[] = [];
 	private steam = new Map<string, { x: number; y: number; bornAt: number }[]>();
+	private sparks: SparkParticle[] = [];
 	private lightningAt = 0;
 	private nextLightning = 30_000;
 	private jitterAt = 0;
@@ -180,6 +194,35 @@ export class Effects {
 				);
 			}
 		}
+	}
+
+	/** one clash: a radial burst in both fighters' accents and white */
+	emitSparks(x: number, y: number, colors: string[], now: number): void {
+		const n = 5 + Math.floor(Math.random() * 2);
+		for (let i = 0; i < n; i++) {
+			const a = (i / n) * Math.PI * 2 + Math.random() * 0.6;
+			const speed = 25 + Math.random() * 30;
+			this.sparks.push({
+				x,
+				y,
+				vx: Math.cos(a) * speed,
+				vy: Math.sin(a) * speed,
+				color: colors[i % colors.length]!,
+				bornAt: now,
+			});
+		}
+	}
+
+	drawSparks(ctx: Ctx, now: number): void {
+		this.sparks = this.sparks.filter((s) => now - s.bornAt < SPARK_LIFE_MS);
+		for (const s of this.sparks) {
+			const age = now - s.bornAt;
+			const t = age / 1000;
+			ctx.globalAlpha = 1 - age / SPARK_LIFE_MS;
+			ctx.fillStyle = s.color;
+			ctx.fillRect(Math.round(s.x + s.vx * t), Math.round(s.y + s.vy * t + 60 * t * t), 1, 1);
+		}
+		ctx.globalAlpha = 1;
 	}
 
 	drawTvPool(ctx: Ctx, now: number): void {

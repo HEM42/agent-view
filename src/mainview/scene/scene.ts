@@ -7,6 +7,7 @@ import type { World } from "../world";
 import { hopOffset, type Character } from "../characters/character";
 import { accentFor } from "../sprites/palette";
 import { Effects, SIGN_LETTERS } from "./effects";
+import { drawSaber } from "./saber";
 import { renderText } from "../ui/font3x5";
 import { SPARK_MS, deskSpot, droneAlpha, plusPos, swarmPos } from "../characters/drone";
 import {
@@ -87,6 +88,8 @@ export class Scene {
 		this.drawDeskLight(ctx, world, now);
 		this.effects.drawMotes(ctx, now);
 		this.effects.drawSteam(ctx, now);
+		for (const s of world.duels.drainSparks()) this.effects.emitSparks(s.x, s.y, s.colors, now);
+		this.effects.drawSparks(ctx, now);
 	}
 
 	overlay(ctx: Ctx): void {
@@ -438,7 +441,10 @@ export class Scene {
 			out.push({
 				sortY,
 				tie: c.id,
-				draw: (ctx) => drawCharacter(ctx, c, now),
+				draw: (ctx) => {
+					drawCharacter(ctx, c, now);
+					drawSaber(ctx, c, world.duels.bladeLen(c.id, now));
+				},
 			});
 		}
 

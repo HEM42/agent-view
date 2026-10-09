@@ -66,7 +66,9 @@ export class World {
 	reconcile(snap: Snapshot, now: number): void {
 		this.lastMessageAt = now;
 		this.herdrOnline = snap.herdrOnline;
-		this.room = snap.room ?? null;
+		if (snap.room) this.room = snap.room;
+		else if (snap.herdrOnline) this.room = null; // online without a room: demo or an older daemon
+		else if (this.room) this.room = { duel: null, scores: this.room.scores }; // daemon away: keep the board, no duel
 		this.offlineReason = snap.herdrOnline
 			? null
 			: (snap.offlineReason ?? "server-down");

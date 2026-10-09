@@ -233,6 +233,32 @@ describe("World room mode", () => {
 		}
 	});
 
+	test("an offline snapshot without a room keeps the board, stops the duel and starts no local one", () => {
+		const w = duelWorld();
+		w.reconcile(snap(0, { duel: duel(EPOCH0), scores: [row] }), 0);
+		let now = run(w, 0, () => w.duels.active()?.phase === "clash");
+		const v = w.scoreboard.version;
+		w.reconcile({ herdrOnline: false, agents, ts: now }, now);
+		const end = now + GAP_MAX_MS + 5000;
+		while (now < end) {
+			now += DT;
+			w.update(DT, now, EPOCH0 + now);
+			expect(w.duels.active()).toBeNull();
+		}
+		expect(board(w)).toEqual(["claude·p-a 4-1"]);
+		expect(w.scoreboard.version).toBe(v);
+	});
+
+	test("an online snapshot without a room still enters local mode after a room", () => {
+		const w = duelWorld();
+		w.reconcile(snap(0, { duel: null, scores: [row] }), 0);
+		w.update(DT, DT, EPOCH0 + DT);
+		w.reconcile(snap(DT), DT);
+		const now = runUntil(w, DT, () => w.duels.active() !== null);
+		expect(now).toBeGreaterThanOrEqual(GAP_MIN_MS);
+		expect(w.scoreboard.top(5)).toEqual([]);
+	});
+
 	test("entering local mode clears the board and lets the local director schedule", () => {
 		const w = duelWorld();
 		w.reconcile(snap(0, { duel: duel(EPOCH0), scores: [row] }), 0);

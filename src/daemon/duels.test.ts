@@ -87,14 +87,19 @@ describe("DuelReferee start rules", () => {
 		expect(d.centerX).toBe(240);
 	});
 	test("only one duel at a time", () => {
-		const r = mk();
-		const { agents, startAt } = ready(r, [agent("A"), agent("B"), agent("C"), agent("D")]);
-		r.update(agents, startAt);
+		// no gap at all and two spare agents: a second duel would start at once if nothing stopped it
+		const r = new DuelReferee({ rng: () => 0, gapMin: 0, gapMax: 0, eligibleIdleMs: IDLE });
+		const agents = [agent("A"), agent("B"), agent("C"), agent("D")];
+		r.update(agents, 0);
+		r.update(agents, IDLE);
+		r.update(agents, IDLE + 1);
 		const first = r.current()!;
-		r.update(agents, startAt + 1000);
-		r.update(agents, startAt + 100_000 - 90_000);
-		expect(r.current()).toBe(first);
-		expect(r.current()!.id).toBe(first.id);
+		expect(first).not.toBeNull();
+		const { endAt } = duelTimes(first);
+		for (let t = first.startAt + 1; t < endAt; t += 500) {
+			r.update(agents, t);
+			expect(r.current()!.id).toBe(first.id);
+		}
 	});
 });
 

@@ -131,7 +131,7 @@ export class DaemonClient {
 	private onMessage(text: string): void {
 		const msg = parseServerMessage(text);
 		switch (msg.kind) {
-			case "world":
+			case "world": {
 				this.lastWorldAt = Date.now();
 				this.backoff = this.t.backoffMinMs;
 				this.fault = "no-daemon";
@@ -139,6 +139,7 @@ export class DaemonClient {
 				this.last = room ? { ...msg.snapshot, room } : msg.snapshot;
 				this.opts.onSnapshot(this.last);
 				return;
+			}
 			case "incompatible":
 				this.fault = "protocol-error";
 				this.drop();

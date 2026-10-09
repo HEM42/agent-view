@@ -174,11 +174,20 @@ export async function ensureDaemon(opts: {
 	port?: number;
 	healthy: () => Promise<boolean>;
 	install?: typeof installDaemon;
+	/** Pause between health retries; injectable for tests. */
+	delay?: (ms: number) => Promise<unknown>;
 	log?: (m: string) => void;
 }): Promise<"running" | "installed" | "failed"> {
 	const install = opts.install ?? installDaemon;
+	const delay = opts.delay ?? Bun.sleep;
 	try {
-		if ((await daemonUpToDate(opts.home, opts.script, opts.bun)) && (await opts.healthy())) return "running";
+		if (await daemonUpToDate(opts.home, opts.script, opts.bun)) {
+			// launchd may still be starting the daemon at login: give it a moment before reinstalling
+			for (let attempt = 1; attempt <= 3; attempt++) {
+				if (await opts.healthy()) return "running";
+				if (attempt < 3) await delay(500);
+			}
+		}
 		await install(opts.home, { bun: opts.bun, script: opts.script }, { port: opts.port });
 		return "installed";
 	} catch (e: any) {

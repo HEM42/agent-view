@@ -122,6 +122,7 @@ describe("ensureDaemon", () => {
 				return f.p;
 			},
 			log: (m) => logs.push(m),
+			delay: async () => {},
 			...over,
 		});
 		return { result, calls, logs };
@@ -146,6 +147,24 @@ describe("ensureDaemon", () => {
 		const f = await fixture();
 		const { result, calls } = await run(f, { healthy: async () => false });
 		expect(result).toBe("installed");
+		expect(calls.length).toBe(1);
+	});
+
+	test("up to date and healthy on the 2nd try: running, no install", async () => {
+		const f = await fixture();
+		let n = 0;
+		const { result, calls } = await run(f, { healthy: async () => ++n >= 2 });
+		expect(result).toBe("running");
+		expect(n).toBe(2);
+		expect(calls).toEqual([]);
+	});
+
+	test("unhealthy 3 times: checks 3 times then installs", async () => {
+		const f = await fixture();
+		let n = 0;
+		const { result, calls } = await run(f, { healthy: async () => (n++, false) });
+		expect(result).toBe("installed");
+		expect(n).toBe(3);
 		expect(calls.length).toBe(1);
 	});
 

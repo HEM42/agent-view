@@ -8,6 +8,7 @@
  *   (use the pre-flipped variant for left). stare.* faces the viewer.
  * - GLOWDOT: 6x6 pre-rendered LED glow stamp.
  * - DRONE: 5x3 subagent drone (2-frame rotor; 'a' = eye, swapped to the parent's project accent) and a 3x3 arrival spark.
+ * - STARS: 7x3 dizzy stars circling a duel loser's head (never a status bubble).
  */
 
 import type { SpriteSheet } from "../pixel";
@@ -252,5 +253,15 @@ export const DRONE: SpriteSheet = {
 		"drone.1": [".r.r.", "ssass", ".s.s."],
 		"spark.0": [".w.", "wcw", ".w."],
 		"spark.1": ["w.w", ".c.", "w.w"],
+	},
+};
+
+/** 7x3 dizzy stars over a knocked-down duelist; two frames alternate to twinkle. */
+export const STARS: SpriteSheet = {
+	palette: FX_PALETTE,
+	anchor: { x: 3, y: 2 },
+	frames: {
+		"stars.0": ["y.....w", ".......", "...l..."],
+		"stars.1": ["...w...", ".......", "l.....y"],
 	},
 };

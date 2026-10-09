@@ -53,6 +53,31 @@ export const ANIMS = {
 			{ frame: "confused.1", ms: 550 },
 		],
 	},
+	duelGuard: {
+		loop: true,
+		frames: [
+			{ frame: "duel.guard.0", ms: 500 },
+			{ frame: "duel.guard.1", ms: 500 },
+		],
+	},
+	duelSwing: {
+		loop: false, // restarted per clash; holds the strike frame
+		frames: [
+			{ frame: "duel.swing.0", ms: 300 },
+			{ frame: "duel.swing.1", ms: 300 },
+		],
+	},
+	duelDown: {
+		loop: true,
+		frames: [{ frame: "duel.down.0", ms: 1000 }],
+	},
+	duelWin: {
+		loop: true,
+		frames: [
+			{ frame: "duel.win.0", ms: 300 },
+			{ frame: "duel.win.1", ms: 300 },
+		],
+	},
 } as const satisfies Record<string, Animation>;
 
 export type AnimName = keyof typeof ANIMS;

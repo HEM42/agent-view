@@ -7,6 +7,7 @@
 		"dev": "electrobun dev --watch",
 		"fake": "HERDR_FAKE=1 electrobun dev --watch",
 		"chaos": "HERDR_FAKE=chaos electrobun dev --watch",
+		"daemon": "bun src/daemon/main.ts",
 		"build": "electrobun build",
 		"test": "bun test"
 	},

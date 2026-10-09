@@ -103,8 +103,8 @@ const SCRIPT: Step[] = [
 	{ at: 70, apply: (w) => w.removeLast(8) },
 	{ at: 80, apply: (w) => w.set(0, "working") }, // back to start; loop at 90
 	// subagents: two background helpers keep agent 0's desk busy after it heads for the couch at 5s
-	{ at: 2, until: 20, apply: (w) => w.sub(0, "fake_sub_bg0", "general-purpose", 2, "Implement Task 5: bridge reads feed") },
-	{ at: 3, until: 17, apply: (w) => w.sub(0, "fake_sub_bg1", "Explore", 3, "Find the feed publisher") },
+	{ at: 2, until: 20, apply: (w) => w.sub(0, "fake_sub_bg0", "general-purpose", 2, "Check the daemon socket") },
+	{ at: 3, until: 17, apply: (w) => w.sub(0, "fake_sub_bg1", "Explore", 3, "Find where drones are drawn") },
 	// burst: 8 subagents on agent 2 (6 drones + "+2"), finishing one by one
 	...Array.from(
 		{ length: 8 },

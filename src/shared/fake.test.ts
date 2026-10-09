@@ -37,7 +37,7 @@ describe("FakeSource subagent scenes", () => {
 		const list = await subsAt(10);
 		expect(list[0]!.map((s) => s.id)).toEqual(["fake_sub_bg0", "fake_sub_bg1"]);
 		expect(list[0]![0]!.startedAt).toBe(T0.getTime() + 2000);
-		expect(list[0]![0]!.description).toBe("Implement Task 5: bridge reads feed");
+		expect(list[0]![0]!.description).toBe("Check the daemon socket");
 	});
 
 	test("burst: agent 2 has 8 subagents at 24s (6 drones + 2), 6 left at 34s, none at 50s", async () => {

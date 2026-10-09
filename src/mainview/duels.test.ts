@@ -8,6 +8,7 @@ import {
 	BLADE_RAMP_MS,
 	DEMO_GAP_MS,
 	DuelDirector,
+	GAP_MAX_MS,
 	GAP_MIN_MS,
 	KNOCKBACK,
 	MAX_CLASHES,
@@ -172,8 +173,7 @@ describe("scheduling", () => {
 		sim.runUntil(() => director.active() === null);
 		const endedAt = sim.now;
 		sim.runUntil(() => director.active() !== null);
-		// walk back to the couch + DEMO_GAP_MS, well under the normal 60s minimum
-		expect(sim.now - endedAt).toBeLessThan(GAP_MIN_MS / 2);
+		expect(sim.now - endedAt).toBeLessThan(DEMO_GAP_MS + 5000); // walk back to the couch + DEMO_GAP_MS
 	});
 });
 
@@ -353,5 +353,9 @@ describe("animation", () => {
 describe("duel length", () => {
 	test("5 to 10 clashes", () => {
 		expect([MIN_CLASHES, MAX_CLASHES]).toEqual([5, 10]);
+	});
+
+	test("20 to 60 s between duels", () => {
+		expect([GAP_MIN_MS, GAP_MAX_MS]).toEqual([20_000, 60_000]);
 	});
 });

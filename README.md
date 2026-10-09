@@ -76,8 +76,8 @@ bun test             # data-layer unit tests
 ## Daemon
 
 Agent View's office lives in a small background daemon. It polls herdr and serves the room to the app over a
-WebSocket on `127.0.0.1:47371`. The app installs and upgrades the daemon itself on launch, so a normal install needs nothing extra. For source checkouts and
-development, install it by hand:
+WebSocket on `127.0.0.1:47371`. The app installs and upgrades the daemon itself on launch, so a normal
+install needs nothing extra. For source checkouts and development, install it by hand:
 
 ```sh
 bun run install:daemon     # bundle, install as a LaunchAgent, start at login
@@ -89,6 +89,9 @@ bun run uninstall:daemon   # stop and remove (keeps saved state and the log)
 - Restart: `launchctl kickstart -k gui/$UID/com.cygnisec.agentview.daemon`
 - From a source checkout, re-run `bun run install:daemon` after pulling changes.
 - The install bundles the daemon next to a copy of bun, so it needs neither this checkout nor bun on PATH.
+- Removing it when you only have the app: `launchctl bootout gui/$UID/com.cygnisec.agentview.daemon`, then delete
+  `~/Library/LaunchAgents/com.cygnisec.agentview.daemon.plist` and `~/Library/Application Support/Agent View/daemon`.
+  Source checkouts: `bun run uninstall:daemon`.
 
 For development, `bun run daemon` runs it in the foreground (set `AGENT_VIEW_PORT` to stay off the installed one).
 `bun run fake` / `bun run chaos` start their own in-process daemon on port 47372 and need nothing installed.

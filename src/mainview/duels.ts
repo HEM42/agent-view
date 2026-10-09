@@ -109,11 +109,10 @@ export function clashPoint(attacker: Duelist, defender: Duelist): Vec2 {
  * pulled out by applyStatus, and the director only notices and cancels.
  */
 export class DuelDirector {
-	/** screensaver demo: the first duel comes after DEMO_GAP_MS */
+	/** screensaver demo: every gap is DEMO_GAP_MS, so each demo loop shows a duel */
 	demo = false;
 	private duel: Duel | null = null;
 	private nextAt: number | null = null;
-	private hadDuel = false;
 	private sparks: Spark[] = [];
 
 	constructor(private rng: () => number = Math.random) {}
@@ -152,7 +151,7 @@ export class DuelDirector {
 	}
 
 	private gap(): number {
-		if (this.demo && !this.hadDuel) return DEMO_GAP_MS;
+		if (this.demo) return DEMO_GAP_MS;
 		return GAP_MIN_MS + this.rng() * (GAP_MAX_MS - GAP_MIN_MS);
 	}
 
@@ -180,7 +179,6 @@ export class DuelDirector {
 			igniteAt: null,
 			retractAt: null,
 		};
-		this.hadDuel = true;
 	}
 
 	private advance(d: Duel, chars: ReadonlyMap<string, Duelist>, slots: SlotManager, now: number): void {

@@ -160,7 +160,7 @@ describe("scheduling", () => {
 		expect(sim.now - idleAgainAt).toBeGreaterThanOrEqual(GAP_MIN_MS);
 	});
 
-	test("screensaver demo: the first gap is short, later ones are not", () => {
+	test("screensaver demo: every gap is short, so each demo loop gets a duel", () => {
 		const director = new DuelDirector(() => 0);
 		director.demo = true;
 		const sim = new Sim(director, [
@@ -170,9 +170,10 @@ describe("scheduling", () => {
 		sim.runFor(DEMO_GAP_MS + 100);
 		expect(director.active()).not.toBeNull();
 		sim.runUntil(() => director.active() === null);
-		sim.runUntil(() => isEligible(sim.chars.get("a")!) && isEligible(sim.chars.get("b")!));
-		sim.runFor(DEMO_GAP_MS * 2);
-		expect(director.active()).toBeNull();
+		const endedAt = sim.now;
+		sim.runUntil(() => director.active() !== null);
+		// walk back to the couch + DEMO_GAP_MS, well under the normal 60s minimum
+		expect(sim.now - endedAt).toBeLessThan(GAP_MIN_MS / 2);
 	});
 });
 

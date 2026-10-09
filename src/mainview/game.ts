@@ -18,7 +18,7 @@ export class Game {
 	private acc = 0;
 	private last = performance.now();
 	private raf = 0;
-	/** screensaver: true while the room shows the scripted demo (first duel comes early) */
+	/** screensaver: true while the room shows the scripted demo (a duel every loop) */
 	get demo(): boolean {
 		return this.world.duels.demo;
 	}

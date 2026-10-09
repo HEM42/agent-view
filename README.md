@@ -29,9 +29,8 @@ launch, run `xattr -dr com.apple.quarantine "/Applications/Agent View.app"`.
 
 You'll also need [herdr](https://herdr.dev) installed and running — Agent
 View reads its agent list from herdr through the Agent View daemon. The app
-gets its data from the daemon, which for now is installed from a source
-checkout with `bun run install:daemon` (see [Daemon](#daemon)); bundling it
-with the app is not done yet.
+installs and upgrades that daemon itself on launch (see [Daemon](#daemon)), so
+there is nothing extra to set up.
 
 ## The room
 
@@ -77,7 +76,8 @@ bun test             # data-layer unit tests
 ## Daemon
 
 Agent View's office lives in a small background daemon. It polls herdr and serves the room to the app over a
-WebSocket on `127.0.0.1:47371`. The app shows **daemon not running** until it is installed:
+WebSocket on `127.0.0.1:47371`. The app installs and upgrades the daemon itself on launch, so a normal install needs nothing extra. For source checkouts and
+development, install it by hand:
 
 ```sh
 bun run install:daemon     # bundle, install as a LaunchAgent, start at login
@@ -87,7 +87,7 @@ bun run uninstall:daemon   # stop and remove (keeps saved state and the log)
 - Log: `~/Library/Logs/Agent View/daemon.log`
 - Check: `curl -s 127.0.0.1:47371/v1/health` and `curl -s 127.0.0.1:47371/v1/world`
 - Restart: `launchctl kickstart -k gui/$UID/com.cygnisec.agentview.daemon`
-- Re-run `bun run install:daemon` after pulling changes.
+- From a source checkout, re-run `bun run install:daemon` after pulling changes.
 - The install bundles the daemon next to a copy of bun, so it needs neither this checkout nor bun on PATH.
 
 For development, `bun run daemon` runs it in the foreground (set `AGENT_VIEW_PORT` to stay off the installed one).

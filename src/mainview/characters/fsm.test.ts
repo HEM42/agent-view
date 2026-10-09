@@ -135,3 +135,30 @@ describe("returnToIdle", () => {
 		expect(LOITER_SPOTS).toContainEqual(c.pending!.slot!.usePos);
 	});
 });
+
+describe("no desk free", () => {
+	/** every desk owned by someone else: the 16th agent in the room */
+	function fullOffice(): SlotManager {
+		const slots = new SlotManager();
+		for (let i = 0; i < 15; i++) slots.ownDesk(`owner${i}`);
+		return slots;
+	}
+	const approaching = () =>
+		char({ state: "WALKING", path: [{ x: 180, y: LANES[2] }], pending: { state: "DUELING", slot: null } });
+
+	test("working mid-walk: stops the walk instead of arriving somewhere else", () => {
+		const c = approaching();
+		applyStatus(c, "working", fullOffice(), 1000);
+		expect(c.state).toBe("IDLE_STANDING");
+		expect(c.path).toEqual([]);
+		expect(c.pending).toBeNull();
+	});
+
+	test("blocked mid-walk: confused on the spot, not overwritten on arrival", () => {
+		const c = approaching();
+		applyStatus(c, "blocked", fullOffice(), 1000);
+		expect(c.state).toBe("CONFUSED");
+		expect(c.path).toEqual([]);
+		expect(c.pending).toBeNull();
+	});
+});

@@ -80,6 +80,12 @@ function walkTo(c: FsmChar, target: Vec2, lane: number, goal: Goal): void {
 	}
 }
 
+/** Drop the old walk where we stand, so arrive() can't overwrite the new state. */
+function stopWalking(c: FsmChar): void {
+	c.path = [];
+	c.pending = null;
+}
+
 export function arrive(c: FsmChar): void {
 	const goal = c.pending;
 	c.pending = null;
@@ -124,6 +130,7 @@ export function applyStatus(
 			const desk = slots.claimDesk(c.id);
 			if (!desk) {
 				// transiently full; stand near the desks and retry on next tick
+				stopWalking(c);
 				c.state = "IDLE_STANDING";
 				return;
 			}
@@ -142,6 +149,7 @@ export function applyStatus(
 			}
 			const desk = slots.claimDesk(c.id);
 			if (!desk) {
+				stopWalking(c);
 				c.state = "CONFUSED";
 				return;
 			}

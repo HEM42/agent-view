@@ -1,7 +1,36 @@
 import { returnToIdle, startDuelWalk, type CharState, type FsmChar } from "./characters/fsm";
 import { LANES, type Vec2 } from "./scene/layout";
 import type { SlotManager } from "./scene/slots";
+import {
+	ARENA_MAX_X,
+	ARENA_MIN_X,
+	CLASH_MS,
+	GAP_MAX_MS,
+	GAP_MIN_MS,
+	IGNITE_MS,
+	MARK_HALF,
+	MAX_CLASHES,
+	MIN_CLASHES,
+	RESULT_MS,
+	RETRACT_MS,
+	STRIKE_MS,
+} from "../shared/duel-timeline";
 import { CHARACTER, DUEL_GRIP, type Grip } from "./sprites/sheets/character";
+
+export {
+	ARENA_MAX_X,
+	ARENA_MIN_X,
+	CLASH_MS,
+	GAP_MAX_MS,
+	GAP_MIN_MS,
+	IGNITE_MS,
+	MARK_HALF,
+	MAX_CLASHES,
+	MIN_CLASHES,
+	RESULT_MS,
+	RETRACT_MS,
+	STRIKE_MS,
+};
 
 export type DuelPose = "guard" | "swing" | "down" | "win";
 
@@ -40,22 +69,10 @@ export interface Spark {
 	colors: string[];
 }
 
-export const GAP_MIN_MS = 20_000;
-export const GAP_MAX_MS = 60_000;
 export const DEMO_GAP_MS = 10_000;
 export const APPROACH_TIMEOUT_MS = 15_000;
-export const IGNITE_MS = 800;
-export const MIN_CLASHES = 5;
-export const MAX_CLASHES = 10;
-export const CLASH_MS = 600;
-export const STRIKE_MS = 300; // duel.swing.1 starts here
-export const RESULT_MS = 2500;
-export const RETRACT_MS = 300;
 export const BLADE_RAMP_MS = 200;
 export const BLADE_LEN = 10;
-export const ARENA_MIN_X = 150;
-export const ARENA_MAX_X = 240;
-export const MARK_HALF = 10;
 export const KNOCKBACK = 6;
 const MAX_PENDING_SPARKS = 8; // nobody draining (paused renderer): don't grow
 const SPARK_WHITE = "#F2EEFF";

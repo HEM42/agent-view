@@ -7,7 +7,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { chmod, copyFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { DEFAULT_PORT } from "../daemon/protocol";
 
@@ -149,4 +149,39 @@ export async function uninstallDaemon(home: string): Promise<string[]> {
 		removed.push(path);
 	}
 	return removed;
+}
+
+/** True when the plist exists, the installed daemon.js has the same bytes as `script` and the installed bun is the same size as `bun`. */
+export async function daemonUpToDate(home: string, script: string, bun: string): Promise<boolean> {
+	const p = paths(home);
+	try {
+		if (!existsSync(p.plist)) return false;
+		const [have, want] = await Promise.all([readFile(p.script), readFile(script)]);
+		if (!have.equals(want)) return false;
+		const [haveBun, wantBun] = await Promise.all([stat(p.bun), stat(bun)]);
+		return haveBun.size === wantBun.size;
+	} catch {
+		return false; // a missing file means not installed
+	}
+}
+
+/** Install or upgrade the daemon only when the installed copy differs or is not answering. */
+export async function ensureDaemon(opts: {
+	home: string;
+	script: string;
+	bun: string;
+	port?: number;
+	healthy: () => Promise<boolean>;
+	install?: typeof installDaemon;
+	log?: (m: string) => void;
+}): Promise<"running" | "installed" | "failed"> {
+	const install = opts.install ?? installDaemon;
+	try {
+		if ((await daemonUpToDate(opts.home, opts.script, opts.bun)) && (await opts.healthy())) return "running";
+		await install(opts.home, { bun: opts.bun, script: opts.script }, { port: opts.port });
+		return "installed";
+	} catch (e: any) {
+		opts.log?.(`daemon setup failed: ${e?.message ?? e}`);
+		return "failed";
+	}
 }

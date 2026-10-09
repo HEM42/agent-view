@@ -70,6 +70,24 @@ bun run chaos        # randomized soak test
 bun test             # data-layer unit tests
 ```
 
+## Daemon
+
+Agent View's office lives in a small background daemon. It polls herdr and serves the room to the app (and to the
+screensaver) over a WebSocket on `127.0.0.1:47371`. The app shows **daemon not running** until it is installed:
+
+```sh
+bun run install:daemon     # compile, install as a LaunchAgent, start at login
+bun run uninstall:daemon   # stop and remove (keeps saved state and the log)
+```
+
+- Log: `~/Library/Logs/Agent View/daemon.log`
+- Check: `curl -s 127.0.0.1:47371/v1/health` and `curl -s 127.0.0.1:47371/v1/world`
+- Restart: `launchctl kickstart -k gui/$UID/com.cygnisec.agentview.daemon`
+- Re-run `install:daemon` after pulling changes to `src/daemon/`.
+
+For development, `bun run daemon` runs it in the foreground (set `AGENT_VIEW_PORT` to stay off the installed one).
+`bun run fake` / `bun run chaos` start their own in-process daemon on port 47372 and need nothing installed.
+
 ## How it works
 
 - **Bun process** (`src/bun/`) polls `herdr agent list` at 1 Hz, normalizes

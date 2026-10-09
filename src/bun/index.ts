@@ -1,25 +1,49 @@
 import { BrowserView, BrowserWindow, Utils } from "electrobun/bun";
+import { startDaemon } from "../daemon/daemon";
+import { daemonPort } from "../daemon/protocol";
 import type { AgentViewRPC, Snapshot } from "../shared/types";
+import { VERSION } from "../shared/version";
+import { DaemonClient } from "./daemon-client";
 import { FakeSource } from "./fake";
-import { HerdrCliSource, HerdrPoller } from "./herdr";
 
 const fakeMode = process.env["HERDR_FAKE"];
-const source = fakeMode ? new FakeSource(fakeMode) : new HerdrCliSource();
+// fake mode runs its own daemon in this process, one port above the installed one
+const port = daemonPort(process.env) + (fakeMode ? 1 : 0);
+if (fakeMode) {
+	try {
+		startDaemon({ port, source: new FakeSource(fakeMode), version: VERSION });
+	} catch (e: any) {
+		console.warn(`[app] fake daemon not started on 127.0.0.1:${port}: ${e?.message ?? e}`);
+	}
+}
 
 let win: BrowserWindow<typeof rpc>;
-let poller: HerdrPoller;
+
+const client = new DaemonClient({
+	url: `ws://127.0.0.1:${port}/v1/ws`,
+	client: "app",
+	version: VERSION,
+	onSnapshot: (snap: Snapshot) => {
+		try {
+			rpc.send.snapshot(snap);
+		} catch {
+			// webview not ready yet; it pulls via getSnapshot on load
+		}
+	},
+});
 
 const rpc = BrowserView.defineRPC<AgentViewRPC>({
 	maxRequestTime: 5000,
 	handlers: {
 		requests: {
-			focusAgent: ({ id }: { id: string }) => {
+			focusAgent: async ({ id }: { id: string }) => {
 				console.log(`[rpc] focusAgent(${id})`);
-				return poller.focus(id);
+				const r = await client.request("focus", { agent: id });
+				return r.ok ? { ok: true } : { ok: false, error: r.error ?? "focus failed" };
 			},
 			getSnapshot: () => {
 				console.log("[rpc] getSnapshot — webview connected");
-				return poller.lastSnapshot();
+				return client.lastSnapshot();
 			},
 			saveShot: async ({ dataUrl }: { dataUrl: string }) => {
 				const dest = process.env["AGENTVIEW_SHOT"];
@@ -52,15 +76,6 @@ win = new BrowserWindow({
 	rpc,
 });
 
-poller = new HerdrPoller(source, (snap: Snapshot) => {
-	try {
-		rpc.send.snapshot(snap);
-	} catch {
-		// webview not ready yet; it pulls via getSnapshot on load
-	}
-});
-void poller.start();
+client.start();
 
-console.log(
-	`Agent View started (${fakeMode ? `fake:${fakeMode}` : "live herdr"})`,
-);
+console.log(`Agent View started (daemon ws://127.0.0.1:${port}${fakeMode ? `, fake:${fakeMode} in-process` : ""})`);

@@ -70,3 +70,18 @@ describe("FakeSource duel window", () => {
 		expect((await statusAt(56))[1]).toBe("working");
 	});
 });
+
+describe("FakeSource second duel window", () => {
+	test("the idle crowd stays until 80s and agent 0 idles until 84s, so a second demo duel can finish", async () => {
+		const listAt = async (s: number) => {
+			setSystemTime(T0);
+			const src = new FakeSource("1", { outage: false });
+			setSystemTime(at(s));
+			return src.list();
+		};
+		expect((await listAt(79)).length).toBe(11); // 3 regulars + 8 crowd
+		expect((await listAt(81)).length).toBe(3);
+		expect((await listAt(83))[0]!.status).toBe("idle");
+		expect((await listAt(85))[0]!.status).toBe("working");
+	});
+});

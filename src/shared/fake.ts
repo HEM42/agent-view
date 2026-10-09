@@ -101,8 +101,8 @@ const SCRIPT: Step[] = [
 	{ at: 40, apply: (w) => w.remove(3) }, // walk-out
 	{ at: 50, apply: (w) => w.addMany(8, "idle") }, // crowd test: couch fills, ramen bar takes the rest
 	{ at: 60, until: 64, apply: (w) => void (w.offline = true) }, // 4s outage
-	{ at: 70, apply: (w) => w.removeLast(8) },
-	{ at: 80, apply: (w) => w.set(0, "working") }, // back to start; loop at 90
+	{ at: 80, apply: (w) => w.removeLast(8) }, // late enough for a second demo duel among the crowd to finish
+	{ at: 84, apply: (w) => w.set(0, "working") }, // back to start; loop at 90
 	// subagents: two background helpers keep agent 0's desk busy after it heads for the couch at 5s
 	{ at: 2, until: 20, apply: (w) => w.sub(0, "fake_sub_bg0", "general-purpose", 2, "Check the daemon socket") },
 	{ at: 3, until: 17, apply: (w) => w.sub(0, "fake_sub_bg1", "Explore", 3, "Find where drones are drawn") },

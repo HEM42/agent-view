@@ -10,6 +10,8 @@ import {
 	DuelDirector,
 	GAP_MIN_MS,
 	KNOCKBACK,
+	MAX_CLASHES,
+	MIN_CLASHES,
 	bladeLength,
 	bladeTip,
 	clashPoint,
@@ -196,14 +198,14 @@ describe("a full duel", () => {
 			sparks += sim.director.drainSparks().length;
 			return sim.director.active()?.phase === "result";
 		});
-		expect(sparks).toBe(3); // rng 0 → 3 clashes
+		expect(sparks).toBe(MIN_CLASHES); // rng 0 → fewest clashes
 		const d = sim.director.active()!;
 		expect(d.winner).toBe("a");
 		expect(sim.chars.get("a")!.duelPose).toBe("win");
 		expect(sim.chars.get("b")!.duelPose).toBe("down");
 		expect(sim.chars.get("b")!.pos.x).toBe(160 + KNOCKBACK);
-		expect(sim.poses.get("a")).toEqual(["guard", "swing", "guard", "swing", "win"]);
-		expect(sim.poses.get("b")).toEqual(["guard", "swing", "guard", "down"]);
+		expect(sim.poses.get("a")).toEqual(["guard", "swing", "guard", "swing", "guard", "swing", "win"]);
+		expect(sim.poses.get("b")).toEqual(["guard", "swing", "guard", "swing", "guard", "down"]);
 		sim.runUntil(() => sim.director.active() === null);
 		for (const c of sim.chars.values()) {
 			expect(c.duelPose).toBeNull();
@@ -212,14 +214,14 @@ describe("a full duel", () => {
 		}
 	});
 
-	test("rng high: six clashes and the right fighter wins", () => {
+	test("rng high: most clashes and the right fighter wins", () => {
 		const sim = pair(() => 0.999);
 		let sparks = 0;
 		sim.runUntil(() => {
 			sparks += sim.director.drainSparks().length;
 			return sim.director.active()?.phase === "result";
 		});
-		expect(sparks).toBe(6);
+		expect(sparks).toBe(MAX_CLASHES);
 		expect(sim.director.active()!.winner).toBe("b");
 		expect(sim.director.active()!.centerX).toBe(240);
 	});
@@ -344,5 +346,11 @@ describe("animation", () => {
 		expect(animFor(as({ duelPose: "win" }))).toBe("duelWin");
 		expect(animFor(as({ duelPose: null }))).toBe("duelGuard");
 		expect(animFor(as({ state: "WALKING", duelPose: "win" }))).toBe("walk");
+	});
+});
+
+describe("duel length", () => {
+	test("5 to 10 clashes", () => {
+		expect([MIN_CLASHES, MAX_CLASHES]).toEqual([5, 10]);
 	});
 });

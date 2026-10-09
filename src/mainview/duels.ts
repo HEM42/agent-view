@@ -39,6 +39,8 @@ export const GAP_MAX_MS = 180_000;
 export const DEMO_GAP_MS = 10_000;
 export const APPROACH_TIMEOUT_MS = 15_000;
 export const IGNITE_MS = 800;
+export const MIN_CLASHES = 5;
+export const MAX_CLASHES = 10;
 export const CLASH_MS = 600;
 export const STRIKE_MS = 300; // duel.swing.1 starts here
 export const RESULT_MS = 2500;
@@ -159,7 +161,7 @@ export class DuelDirector {
 		const first = pool.splice(Math.floor(this.rng() * pool.length), 1)[0]!;
 		const second = pool[Math.floor(this.rng() * pool.length)]!;
 		const centerX = Math.round(ARENA_MIN_X + this.rng() * (ARENA_MAX_X - ARENA_MIN_X));
-		const clashes = 3 + Math.floor(this.rng() * 4);
+		const clashes = MIN_CLASHES + Math.floor(this.rng() * (MAX_CLASHES - MIN_CLASHES + 1));
 		// whoever is further left takes the left mark: fewer crossed paths
 		const [left, right] = first.pos.x <= second.pos.x ? [first, second] : [second, first];
 		const y = LANES[2]!;

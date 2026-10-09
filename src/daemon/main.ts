@@ -5,7 +5,7 @@ import { startDaemon, stamp } from "./daemon";
 import { daemonPort } from "./protocol";
 import { isAddrInUse } from "./server";
 
-/** agent-view-daemon: `bun run daemon` in a terminal, or the compiled binary under launchd. */
+/** agent-view-daemon: `bun run daemon` in a terminal, or a bundled copy under launchd. */
 const fakeMode = process.env["HERDR_FAKE"];
 const port = daemonPort(process.env);
 

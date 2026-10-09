@@ -11,7 +11,7 @@ export interface AgentView {
 	focused: boolean; // pane currently focused in herdr
 }
 
-export type OfflineReason = "not-installed" | "server-down" | "protocol-error";
+export type OfflineReason = "not-installed" | "server-down" | "protocol-error" | "no-daemon";
 
 export interface Snapshot {
 	herdrOnline: boolean;

@@ -278,4 +278,39 @@ describe("ScoreBook daily rollover", () => {
 		expect(b.rows()).toEqual([]);
 		expect(logs.some((l) => l.includes("history"))).toBe(true);
 	});
+
+	test("a failed archive leaves the old day on disk so the next start retries", async () => {
+		const path = join(dir, "scores.json");
+		const logs: string[] = [];
+		const b = new ScoreBook(path, (m) => logs.push(m), NOW);
+		b.record(who("a", "p"), who("b", "p"));
+		await b.save();
+		const onDisk = await readFile(path, "utf8");
+		await writeFile(join(dir, "history"), "a file in the way");
+		expect(await b.rollover(NEXT)).toBe(true);
+		expect(b.rows()).toEqual([]);
+		expect(b.champion()?.agent).toBe("a");
+		expect(await readFile(path, "utf8")).toBe(onDisk);
+		expect(JSON.parse(onDisk).day).toBe("2026-10-11");
+		expect(logs.some((l) => l.includes("history") && l.includes("2026-10-11"))).toBe(true);
+	});
+
+	test("a stored day in the future (clock moved back) does not roll over or archive", async () => {
+		const path = join(dir, "scores.json");
+		await writeFile(
+			path,
+			JSON.stringify({
+				version: 1,
+				day: "2026-10-20",
+				champion: null,
+				rows: [{ key: "a·p", agent: "a", project: "p", wins: 1, losses: 0 }],
+			}),
+		);
+		const b = new ScoreBook(path, quiet, NOW);
+		await b.load();
+		expect(await b.rollover(NEXT)).toBe(false);
+		expect(b.rows()).toHaveLength(1);
+		expect(b.champion()).toBeNull();
+		expect(existsSync(join(dir, "history"))).toBe(false);
+	});
 });

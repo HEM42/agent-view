@@ -147,7 +147,7 @@ export class ScoreBook {
 	 */
 	async rollover(now: Date | number): Promise<boolean> {
 		const next = today(now);
-		if (next === this.day) return false;
+		if (!(next > this.day)) return false; // same day, or a clock gone backwards: nothing to do
 		const day = this.day;
 		const rows = this.rows();
 		const top = rows[0];
@@ -163,7 +163,9 @@ export class ScoreBook {
 				try {
 					await this.writeHistory(path, day, rows);
 				} catch (e) {
-					this.log(`could not write scores history for ${day}: ${String(e)}`);
+					// keep the old day on disk so the next start retries the archive
+					this.log(`could not write scores history for ${day}: ${String(e)}; leaving scores.json on ${day} to retry`);
+					return;
 				}
 			}
 			await this.write(path);

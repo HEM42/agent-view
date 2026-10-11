@@ -91,6 +91,9 @@ the Agent View daemon over a WebSocket on `127.0.0.1:47371` (needs
 daemon, or while herdr is down, the saver shows the demo loop (marked `DEMO`)
 and never an offline banner.
 
+The duel scoreboard resets at local midnight; each day's final standings are kept in `state/history/`, and
+yesterday's champion wears the crown on the wall scoreboard.
+
 Building the saver needs the Xcode Command Line Tools (`swiftc`):
 
 ```bash

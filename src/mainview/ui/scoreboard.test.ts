@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { fitName, nameRoom } from "./scoreboard";
+import { BOARD, CROWN, fitName, headerLayout, nameRoom } from "./scoreboard";
+import { textWidth } from "./font3x5";
 
 describe("scoreboard rows", () => {
 	test("a short name fits as is", () => {
@@ -19,5 +20,37 @@ describe("scoreboard rows", () => {
 
 	test("name room shrinks as the score grows", () => {
 		expect(nameRoom("1-0")).toBeGreaterThan(nameRoom("12-10"));
+	});
+});
+
+describe("scoreboard header with a champion", () => {
+	const PAD = 3;
+	const who = (agent: string, project: string) => ({ agent, project });
+
+	test("the crown is five pixels wide on every row", () => {
+		expect(CROWN.length).toBeGreaterThanOrEqual(4);
+		expect(CROWN.length).toBeLessThanOrEqual(5);
+		for (const r of CROWN) expect(r).toHaveLength(5);
+	});
+
+	test("a short name sits right-aligned, the crown one pixel before it", () => {
+		const l = headerLayout(who("claude", "nexel"))!;
+		expect(l.name).toEqual({ agent: "claude", project: "nexel" });
+		expect(l.nameX + l.nameW).toBe(BOARD.w - PAD);
+		expect(l.nameW).toBe(textWidth("claude·nexel"));
+		expect(l.crownX + 5 + 1).toBe(l.nameX);
+	});
+
+	test("a long name is cut so it never reaches DUELS", () => {
+		const l = headerLayout(who("averyveryverylongagentname", "perl-fibia-nexel-model"))!;
+		expect(l.nameW).toBeLessThanOrEqual(BOARD.w - PAD * 2 - textWidth("duels") - 3 - 5 - 1);
+		expect(l.crownX).toBeGreaterThanOrEqual(PAD + textWidth("duels") + 3);
+		expect(l.name.agent.length + 1 + l.name.project.length).toBeLessThanOrEqual(l.maxChars);
+		expect(l.name.project.endsWith(".") || l.name.agent.endsWith(".")).toBe(true);
+	});
+
+	test("names are lower-cased and no champion means no layout", () => {
+		expect(headerLayout(who("Claude", "NEXEL"))!.name).toEqual({ agent: "claude", project: "nexel" });
+		expect(headerLayout(null)).toBeNull();
 	});
 });

@@ -161,12 +161,12 @@ export class World {
 		if (this.room) {
 			this.followingRoom = true;
 			this.duels.follow(this.room.duel, this.chars, this.slots, now, epochNow);
-			this.scoreboard.replace(this.room.scores);
+			this.scoreboard.replace(this.room.scores, this.room.champion);
 			return;
 		}
 		if (this.followingRoom) {
 			this.followingRoom = false;
-			this.scoreboard.replace([]); // local scores start over
+			this.scoreboard.replace([], null); // local scores start over, with no champion
 		}
 		this.duels.update(this.chars, this.slots, now);
 		for (const r of this.duels.drainResults()) {

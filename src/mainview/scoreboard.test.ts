@@ -133,3 +133,59 @@ describe("Scoreboard.replace (the daemon's standings)", () => {
 		expect(b.version).toBe(v0);
 	});
 });
+
+describe("Scoreboard champion", () => {
+	const champ = (agent: string, project: string) => ({ agent, project });
+	const r = (agent: string, project: string): ScoreRow => ({ key: `${agent}·${project}`, agent, project, wins: 1, losses: 0 });
+
+	test("starts without one", () => {
+		expect(new Scoreboard().champion).toBeNull();
+	});
+
+	test("replace sets it, coloured like the nametags, and bumps the version", () => {
+		const b = new Scoreboard();
+		accentFor("champ-proj");
+		const v = b.version;
+		b.replace([], champ("claude", "champ-proj"));
+		expect(b.version).not.toBe(v);
+		expect(b.champion).toEqual({
+			agent: "claude",
+			project: "champ-proj",
+			agentColor: outfitFor("claude").base,
+			accent: accentFor("champ-proj"),
+		});
+	});
+
+	test("an unseen champion gets the neutral colours and claims no palette slot", () => {
+		const b = new Scoreboard();
+		b.replace([], champ("never-seen-agent-x", "never-seen-champ"));
+		expect(b.champion!.accent).toBe(PAL.lilac);
+		expect(b.champion!.agentColor).toBe(PAL.lilac);
+		expect(peekAccent("never-seen-champ")).toBeUndefined();
+	});
+
+	test("the same champion does not bump, a changed or cleared one does, even with the same rows array", () => {
+		const b = new Scoreboard();
+		const same = [r("pi", "x")];
+		b.replace(same, champ("claude", "a"));
+		const v = b.version;
+		b.replace(same, champ("claude", "a"));
+		expect(b.version).toBe(v);
+		b.replace(same, champ("claude", "b"));
+		expect(b.version).not.toBe(v);
+		const v2 = b.version;
+		b.replace(same, null);
+		expect(b.version).not.toBe(v2);
+		expect(b.champion).toBeNull();
+		const v3 = b.version;
+		b.replace(same);
+		expect(b.version).toBe(v3);
+	});
+
+	test("a local result leaves the champion alone", () => {
+		const b = new Scoreboard();
+		b.replace([], champ("claude", "a"));
+		b.record(f("pi", "x"), f("pi", "y"));
+		expect(b.champion?.agent).toBe("claude");
+	});
+});

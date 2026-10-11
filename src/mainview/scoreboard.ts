@@ -1,4 +1,4 @@
-import type { ScoreRow } from "../shared/types";
+import type { RoomState, ScoreRow } from "../shared/types";
 import { PAL, peekAccent, peekAgentColor } from "./sprites/palette";
 
 /** Rows for agents and projects not on screen: they must not claim a palette slot. */
@@ -18,6 +18,14 @@ export interface Standing extends Fighter {
 	losses: number;
 }
 
+/** Yesterday's winner as the header shows them: identity plus nametag colours. */
+export interface Champion {
+	agent: string;
+	project: string;
+	agentColor: string;
+	accent: string;
+}
+
 /**
  * Lightsaber duel wins and losses per agent·project. Local mode records
  * results in memory (the board starts empty with every launch); room mode
@@ -30,6 +38,8 @@ export class Scoreboard {
 	/** what replace() last set, to skip no-op redraws; null after a local record */
 	private replaced: string | null = "[]";
 	private lastRows: readonly ScoreRow[] | null = null;
+	/** yesterday's winner (room mode only; local duels have no past day) */
+	champion: Champion | null = null;
 
 	record(winner: Fighter, loser: Fighter): void {
 		this.row(winner).wins++;
@@ -40,8 +50,13 @@ export class Scoreboard {
 	}
 
 	/** Room mode: the daemon's standings, coloured like the nametags. */
-	replace(rows: readonly ScoreRow[]): void {
-		if (rows === this.lastRows) return; // the same snapshot again
+	replace(rows: readonly ScoreRow[], champion: RoomState["champion"] = null): void {
+		const crowned = this.setChampion(champion);
+		if (rows === this.lastRows) {
+			// the same snapshot again
+			if (crowned) this.version++;
+			return;
+		}
 		this.lastRows = rows;
 		const next = rows
 			.map((r) => ({
@@ -55,10 +70,28 @@ export class Scoreboard {
 			}))
 			.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 		const sig = JSON.stringify(next);
-		if (sig === this.replaced) return;
+		if (sig === this.replaced) {
+			if (crowned) this.version++;
+			return;
+		}
 		this.replaced = sig;
 		this.rows = new Map(next.map((s) => [s.key, s]));
 		this.version++;
+	}
+
+	/** Room mode's champion, coloured like the rows. True when it changed. */
+	private setChampion(c: RoomState["champion"]): boolean {
+		const next: Champion | null = c
+			? {
+					agent: c.agent,
+					project: c.project,
+					agentColor: peekAgentColor(c.agent) ?? NEUTRAL,
+					accent: peekAccent(c.project) ?? NEUTRAL,
+				}
+			: null;
+		if (JSON.stringify(next) === JSON.stringify(this.champion)) return false;
+		this.champion = next;
+		return true;
 	}
 
 	/** Most wins first, then fewest losses, then name. */

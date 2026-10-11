@@ -231,7 +231,7 @@ export class Scene {
 	/** duel standings on the wall; re-rendered only when a result comes in */
 	private drawScoreboard(ctx: Ctx, world: World): void {
 		if (!this.board || this.boardVersion !== world.scoreboard.version) {
-			this.board = renderScoreboard(world.scoreboard.top(BOARD_ROWS));
+			this.board = renderScoreboard(world.scoreboard.top(BOARD_ROWS), world.scoreboard.champion);
 			this.boardVersion = world.scoreboard.version;
 		}
 		ctx.drawImage(this.board, BOARD.x, BOARD.y);

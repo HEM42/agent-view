@@ -210,6 +210,30 @@ describe("World room mode", () => {
 		expect(board(w)).toEqual(["claude·p-a 4-1"]);
 	});
 
+	test("room mode shows the room's champion; leaving it clears it", () => {
+		const w = duelWorld();
+		w.reconcile(snap(0, { duel: null, scores: [row], champion: { agent: "claude", project: "p-a" } }), 0);
+		w.update(DT, DT, EPOCH0 + DT);
+		expect(w.scoreboard.champion).toMatchObject({ agent: "claude", project: "p-a" });
+		w.reconcile(snap(DT, { duel: null, scores: [row], champion: null }), DT); // a day without a winner
+		w.update(DT, 2 * DT, EPOCH0 + 2 * DT);
+		expect(w.scoreboard.champion).toBeNull();
+		w.reconcile(snap(2 * DT, { duel: null, scores: [row], champion: { agent: "pi", project: "q" } }), 2 * DT);
+		w.update(DT, 3 * DT, EPOCH0 + 3 * DT);
+		w.reconcile(snap(3 * DT), 3 * DT); // local mode
+		w.update(DT, 4 * DT, EPOCH0 + 4 * DT);
+		expect(w.scoreboard.champion).toBeNull();
+	});
+
+	test("a daemon that goes away keeps the champion on the board", () => {
+		const w = duelWorld();
+		w.reconcile(snap(0, { duel: null, scores: [row], champion: { agent: "pi", project: "q" } }), 0);
+		w.update(DT, DT, EPOCH0 + DT);
+		w.reconcile({ herdrOnline: false, agents, ts: DT }, DT);
+		w.update(DT, 2 * DT, EPOCH0 + 2 * DT);
+		expect(w.scoreboard.champion).toMatchObject({ agent: "pi" });
+	});
+
 	test("returning to local mode starts a fresh gap, not the one pending before the room", () => {
 		const w = duelWorld();
 		let now = 0;

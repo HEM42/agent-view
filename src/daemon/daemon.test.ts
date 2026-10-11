@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test } from "bun:test";
@@ -139,6 +139,44 @@ test("serves a duel, then the scoreboard, and saves the scores", async () => {
 		expect(saved.version).toBe(1);
 		expect(saved.rows).toHaveLength(2);
 		expect(log.filter((l) => /^duel: .+ beat /.test(l))).toHaveLength(1);
+	} finally {
+		daemons.splice(0).forEach((x) => x.stop());
+		await rm(dir, { recursive: true, force: true });
+	}
+});
+
+test("rolls yesterday's scores over: archives them, crowns the winner and serves the champion", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "av-rollover-"));
+	try {
+		const state = join(dir, "state");
+		const scoresPath = join(state, "scores.json");
+		await mkdir(state, { recursive: true });
+		const rows = [
+			{ key: "claude·alpha", agent: "claude", project: "alpha", wins: 3, losses: 1 },
+			{ key: "pi·beta", agent: "pi", project: "beta", wins: 1, losses: 3 },
+		];
+		await writeFile(scoresPath, JSON.stringify({ version: 1, day: "2000-01-01", champion: null, rows }));
+		const log: string[] = [];
+		const d = startDaemon({ port: 0, source: new ScriptedSource(), version: "t", log: (m) => log.push(m), scoresPath });
+		daemons.push(d);
+		const world = async (): Promise<any> => (await (await fetch(`http://127.0.0.1:${d.port}/v1/world`)).json()).world;
+		await waitFor(() => log.some((l) => l.startsWith("scores: new day ")));
+		const w = await world();
+		expect(w.champion).toEqual({ agent: "claude", project: "alpha" });
+		expect(w.scores).toEqual([]);
+		expect(log.filter((l) => l.startsWith("scores: new day "))).toHaveLength(1);
+		expect(log.find((l) => l.startsWith("scores: new day "))).toMatch(/^scores: new day \d{4}-\d{2}-\d{2}, champion claude·alpha$/);
+		const history = join(state, "history", "2000-01-01.json");
+		await waitFor(() => existsSync(history));
+		expect(JSON.parse(await readFile(history, "utf8"))).toEqual({ version: 1, day: "2000-01-01", rows });
+		for (let i = 0; i < 100; i++) {
+			const saved = JSON.parse(await readFile(scoresPath, "utf8"));
+			if (saved.day !== "2000-01-01") break;
+			await Bun.sleep(20);
+		}
+		expect(JSON.parse(await readFile(scoresPath, "utf8"))).toMatchObject({ champion: { agent: "claude", wins: 3, day: "2000-01-01" }, rows: [] });
+		await Bun.sleep(600); // more ticks: still a single rollover
+		expect(log.filter((l) => l.startsWith("scores: new day "))).toHaveLength(1);
 	} finally {
 		daemons.splice(0).forEach((x) => x.stop());
 		await rm(dir, { recursive: true, force: true });

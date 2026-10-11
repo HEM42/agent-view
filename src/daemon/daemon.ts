@@ -1,7 +1,7 @@
 import { HerdrPoller, type AgentSource } from "../bun/herdr";
 import type { Snapshot } from "../shared/types";
 import { DuelReferee, type DuelRefereeOptions } from "./duels";
-import { ScoreBook } from "./scores";
+import { ScoreBook, today } from "./scores";
 import { startServer } from "./server";
 
 export interface DaemonOptions {
@@ -39,8 +39,26 @@ export function startDaemon(opts: DaemonOptions): Daemon {
 	let saving: Promise<void> = Promise.resolve();
 	const listeners: ((s: Snapshot) => void)[] = [];
 	let herdrState = "";
+	/** Start the new local day when the date moved on; the book flips synchronously, the writes follow. */
+	const rollover = (): void => {
+		const now = Date.now();
+		const announce = (): void => {
+			const c = book.champion();
+			log(`scores: new day ${today(now)}, champion ${c ? `${c.agent}·${c.project}` : "none"}`);
+		};
+		book.rollover(now).then(
+			(rolled) => {
+				if (rolled) announce();
+			},
+			(e) => {
+				announce(); // the day did roll over in memory; only a write failed
+				log(`could not save scores: ${String(e)}`);
+			},
+		);
+	};
 	const tick = (s: Snapshot = poller.lastSnapshot()): void => {
 		if (!loaded || stopped) return;
+		rollover();
 		referee.update(s.agents, Date.now());
 		const results = referee.drainResults();
 		if (results.length === 0) return;
@@ -67,7 +85,10 @@ export function startDaemon(opts: DaemonOptions): Daemon {
 		port: opts.port,
 		version: opts.version,
 		log,
-		world: () => ({ duel: referee.current(), scores: book.rows() }),
+		world: () => {
+			const c = book.champion();
+			return { duel: referee.current(), scores: book.rows(), champion: c ? { agent: c.agent, project: c.project } : null };
+		},
 		feed: {
 			last: () => poller.lastSnapshot(),
 			subscribe: (fn) => {
@@ -81,6 +102,7 @@ export function startDaemon(opts: DaemonOptions): Daemon {
 		.catch((e) => log(`could not load scores: ${String(e)}`))
 		.finally(() => {
 			loaded = true;
+			rollover();
 		});
 	void poller.start();
 	const timer = setInterval(tick, 250);

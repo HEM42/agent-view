@@ -29,7 +29,7 @@ describe("SaverFeed", () => {
 	});
 
 	test("the daemon's room rides on the live snapshot; no scores means no room", () => {
-		const room = { duel: null, scores: [{ key: "k", agent: "claude", project: "n", wins: 1, losses: 0 }] };
+		const room = { duel: null, scores: [{ key: "k", agent: "claude", project: "n", wins: 1, losses: 0 }], champion: null };
 		const f = fresh(0);
 		f.accept(JSON.stringify({ t: "world", api: 1, snapshot: snap({ ts: 5 }), world: room }), 100);
 		expect(f.live(100)).toEqual(snap({ ts: 5, room }));

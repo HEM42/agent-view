@@ -71,4 +71,6 @@ export type AgentViewRPC = {
 export interface RoomState {
 	duel: DuelInfo | null;
 	scores: ScoreRow[];
+	/** yesterday's winner; null until a day with a win has ended (or from an older daemon) */
+	champion: { agent: string; project: string } | null;
 }

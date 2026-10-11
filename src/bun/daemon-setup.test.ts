@@ -207,7 +207,7 @@ describe("relabelOffline", () => {
 		expect(relabelOffline(snap("no-daemon"), "failed").offlineReason).toBe("daemon-down");
 	});
 	test("keeps the room", () => {
-		const room = { duel: null, scores: [] };
+		const room = { duel: null, scores: [], champion: null };
 		expect(relabelOffline({ ...snap("no-daemon"), room }, "ready").room).toEqual(room);
 	});
 	test("unchanged when unmanaged", () => {

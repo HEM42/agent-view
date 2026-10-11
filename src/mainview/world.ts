@@ -68,7 +68,7 @@ export class World {
 		this.herdrOnline = snap.herdrOnline;
 		if (snap.room) this.room = snap.room;
 		else if (snap.herdrOnline) this.room = null; // online without a room: demo or an older daemon
-		else if (this.room) this.room = { duel: null, scores: this.room.scores }; // daemon away: keep the board, no duel
+		else if (this.room) this.room = { duel: null, scores: this.room.scores, champion: this.room.champion }; // daemon away: keep the board, no duel
 		this.offlineReason = snap.herdrOnline
 			? null
 			: (snap.offlineReason ?? "server-down");

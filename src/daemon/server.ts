@@ -75,7 +75,7 @@ export function startServer(opts: ServerOptions): DaemonServer {
 	const sockets = new Set<ServerWebSocket<Conn>>();
 	let nextId = 1;
 
-	const world = opts.world ?? ((): RoomState => ({ duel: null, scores: [] }));
+	const world = opts.world ?? ((): RoomState => ({ duel: null, scores: [], champion: null }));
 	const current = (): string => JSON.stringify(worldMessage(opts.feed.last(), world()));
 	const log = opts.log ?? ((m: string) => console.log(m));
 	const heartbeatMs = opts.heartbeatMs ?? HEARTBEAT_MS;

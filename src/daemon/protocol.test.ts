@@ -114,14 +114,23 @@ describe("roomOf", () => {
 	});
 
 	test("a valid room passes through", () => {
-		expect(roomOf({ duel, scores: [row] })).toEqual({ duel, scores: [row] });
-		expect(roomOf({ duel: null, scores: [] })).toEqual({ duel: null, scores: [] });
+		expect(roomOf({ duel, scores: [row] })).toEqual({ duel, scores: [row], champion: null });
+		expect(roomOf({ duel: null, scores: [] })).toEqual({ duel: null, scores: [], champion: null });
 	});
 
 	test("a malformed duel becomes null", () => {
-		expect(roomOf({ duel: { ...duel, clashes: "6" }, scores: [] })).toEqual({ duel: null, scores: [] });
-		expect(roomOf({ duel: 3, scores: [] })).toEqual({ duel: null, scores: [] });
-		expect(roomOf({ scores: [] })).toEqual({ duel: null, scores: [] });
+		expect(roomOf({ duel: { ...duel, clashes: "6" }, scores: [] })).toEqual({ duel: null, scores: [], champion: null });
+		expect(roomOf({ duel: 3, scores: [] })).toEqual({ duel: null, scores: [], champion: null });
+		expect(roomOf({ scores: [] })).toEqual({ duel: null, scores: [], champion: null });
+	});
+
+	test("the champion passes through, and a missing or malformed one is null", () => {
+		const champion = { agent: "claude", project: "n" };
+		expect(roomOf({ duel: null, scores: [], champion })).toEqual({ duel: null, scores: [], champion });
+		expect(roomOf({ duel: null, scores: [], champion: { ...champion, extra: 1, wins: 3 } })?.champion).toEqual(champion);
+		for (const bad of [undefined, null, 3, "x", [], {}, { agent: "a" }, { agent: 1, project: "p" }, { agent: "a", project: null }]) {
+			expect(roomOf({ duel: null, scores: [], champion: bad })?.champion).toBeNull();
+		}
 	});
 
 	test("malformed rows are dropped", () => {

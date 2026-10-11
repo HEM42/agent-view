@@ -56,14 +56,14 @@ describe("DaemonClient", () => {
 		const s = serve(manualFeed(snap({ ts: 11 })).feed, 0, { log: (m) => log.push(m) });
 		const { c, got } = connect(s.port);
 		await waitFor(() => online(got).length >= 1);
-		expect(got[0]).toEqual({ ...snap({ ts: 11 }), room: { duel: null, scores: [] } });
-		expect(c.lastSnapshot()).toEqual({ ...snap({ ts: 11 }), room: { duel: null, scores: [] } });
+		expect(got[0]).toEqual({ ...snap({ ts: 11 }), room: { duel: null, scores: [], champion: null } });
+		expect(c.lastSnapshot()).toEqual({ ...snap({ ts: 11 }), room: { duel: null, scores: [], champion: null } });
 		await waitFor(() => log.some((l) => l.includes("app test") && l.includes("connected")));
 	});
 
 	test("a world with scores gives the snapshot a room; one without gives none", async () => {
 		const row = { key: "claude·n", agent: "claude", project: "n", wins: 2, losses: 1 };
-		let world: unknown = { duel: null, scores: [row] };
+		let world: unknown = { duel: null, scores: [row], champion: null };
 		const srv = Bun.serve({
 			hostname: "127.0.0.1",
 			port: 0,
@@ -78,8 +78,8 @@ describe("DaemonClient", () => {
 		cleanups.push(() => srv.stop(true));
 		const a = connect(srv.port);
 		await waitFor(() => online(a.got).length >= 1);
-		expect(a.got[0]!.room).toEqual({ duel: null, scores: [row] });
-		expect(a.c.lastSnapshot().room).toEqual({ duel: null, scores: [row] });
+		expect(a.got[0]!.room).toEqual({ duel: null, scores: [row], champion: null });
+		expect(a.c.lastSnapshot().room).toEqual({ duel: null, scores: [row], champion: null });
 		world = {};
 		const b = connect(srv.port);
 		await waitFor(() => online(b.got).length >= 1);

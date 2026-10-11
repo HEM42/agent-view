@@ -175,7 +175,7 @@ describe("World room mode", () => {
 
 	test("follows the daemon's duel and shows its scoreboard, recording nothing itself", () => {
 		const w = duelWorld();
-		w.reconcile(snap(0, { duel: duel(EPOCH0), scores: [row] }), 0);
+		w.reconcile(snap(0, { duel: duel(EPOCH0), scores: [row], champion: null }), 0);
 		w.update(DT, DT, EPOCH0 + DT);
 		expect(w.duels.active()).toMatchObject({ a: "a", b: "b", centerX: 180, phase: "approach" });
 		expect(board(w)).toEqual(["claude·p-a 4-1"]);
@@ -186,7 +186,7 @@ describe("World room mode", () => {
 
 	test("a room without a duel never schedules a local one", () => {
 		const w = duelWorld();
-		w.reconcile(snap(0, { duel: null, scores: [] }), 0);
+		w.reconcile(snap(0, { duel: null, scores: [], champion: null }), 0);
 		const end = GAP_MAX_MS + 5000;
 		let now = 0;
 		while (now < end) {
@@ -199,7 +199,7 @@ describe("World room mode", () => {
 	test("entering room mode cancels the local duel and adopts the room's board", () => {
 		const w = duelWorld();
 		let now = runUntil(w, 0, () => w.duels.active()?.phase === "clash");
-		w.reconcile(snap(now, { duel: null, scores: [row] }), now);
+		w.reconcile(snap(now, { duel: null, scores: [row], champion: null }), now);
 		now += DT;
 		w.update(DT, now, EPOCH0 + now);
 		expect(w.duels.active()).toBeNull();
@@ -218,7 +218,7 @@ describe("World room mode", () => {
 			w.update(DT, now, EPOCH0 + now);
 		}
 		expect(w.duels.active()).toBeNull(); // local gap pending, nearly due
-		w.reconcile(snap(now, { duel: null, scores: [] }), now);
+		w.reconcile(snap(now, { duel: null, scores: [], champion: null }), now);
 		const roomEnd = now + GAP_MAX_MS + 5000;
 		while (now < roomEnd) {
 			now += DT;
@@ -235,7 +235,7 @@ describe("World room mode", () => {
 
 	test("an offline snapshot without a room keeps the board, stops the duel and starts no local one", () => {
 		const w = duelWorld();
-		w.reconcile(snap(0, { duel: duel(EPOCH0), scores: [row] }), 0);
+		w.reconcile(snap(0, { duel: duel(EPOCH0), scores: [row], champion: null }), 0);
 		let now = run(w, 0, () => w.duels.active()?.phase === "clash");
 		const v = w.scoreboard.version;
 		w.reconcile({ herdrOnline: false, agents, ts: now }, now);
@@ -251,7 +251,7 @@ describe("World room mode", () => {
 
 	test("an online snapshot without a room still enters local mode after a room", () => {
 		const w = duelWorld();
-		w.reconcile(snap(0, { duel: null, scores: [row] }), 0);
+		w.reconcile(snap(0, { duel: null, scores: [row], champion: null }), 0);
 		w.update(DT, DT, EPOCH0 + DT);
 		w.reconcile(snap(DT), DT);
 		const now = runUntil(w, DT, () => w.duels.active() !== null);
@@ -261,7 +261,7 @@ describe("World room mode", () => {
 
 	test("entering local mode clears the board and lets the local director schedule", () => {
 		const w = duelWorld();
-		w.reconcile(snap(0, { duel: duel(EPOCH0), scores: [row] }), 0);
+		w.reconcile(snap(0, { duel: duel(EPOCH0), scores: [row], champion: null }), 0);
 		let now = run(w, 0, () => w.duels.active()?.phase === "clash");
 		const v = w.scoreboard.version;
 		w.reconcile(snap(now), now);

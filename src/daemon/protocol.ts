@@ -119,13 +119,19 @@ function rowOf(v: unknown): ScoreRow | null {
 	return { key, agent, project, wins: wins as number, losses: losses as number };
 }
 
+function championOf(v: unknown): RoomState["champion"] {
+	if (!isObject(v)) return null;
+	const { agent, project } = v;
+	return typeof agent === "string" && typeof project === "string" ? { agent, project } : null;
+}
+
 /**
  * The shared room out of a received world, or null when the daemon sent none
  * (no `scores` array: an older daemon), in which case clients keep local duels.
- * A malformed duel becomes null; malformed rows are dropped.
+ * A malformed duel or champion becomes null; malformed rows are dropped.
  */
 export function roomOf(world: unknown): RoomState | null {
 	if (!isObject(world) || !Array.isArray(world["scores"])) return null;
 	const scores = world["scores"].map(rowOf).filter((r): r is ScoreRow => r !== null);
-	return { duel: duelOf(world["duel"]), scores };
+	return { duel: duelOf(world["duel"]), scores, champion: championOf(world["champion"]) };
 }
